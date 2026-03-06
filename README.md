@@ -1,7 +1,5 @@
  
-# Blood-Cat
- 
-<img src="./pic/main2.png" width="100%">
+# bl4ckEYE-Mac
 
 A tool for hacking into publicly exposed network cameras, with support for specifying country and region.
 
@@ -640,6 +638,7 @@ $ python3 bloodcat_map_lan.py
 
 
  
+
 
 
 
