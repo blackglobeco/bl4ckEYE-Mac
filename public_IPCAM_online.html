@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Webcam & Live Streams Quick Access</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --muted:#9aa4b2;
+      --accent:#3b82f6;
+      --accent-light:#60a5fa;
+      --glass: rgba(255,255,255,0.03);
+      --glass-hover: rgba(255,255,255,0.05);
+      --border: rgba(255,255,255,0.08);
+      --shadow: rgba(2,6,23,0.6);
+      --shadow-hover: rgba(2,6,23,0.8);
+      color-scheme: dark;
+      scroll-behavior: smooth;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body{
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: linear-gradient(135deg, #071022 0%, #071827 50%, #0f1724 100%);
+      color:#e6eef8;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding: clamp(16px, 3vw, 28px);
+      min-height: 100vh;
+      opacity: 0;
+      animation: fadeIn 0.6s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    header{
+      display:flex;
+      align-items:center;
+      gap: clamp(12px, 2vw, 16px);
+      margin-bottom: clamp(16px, 2vw, 24px);
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header .header-content {
+      flex: 1;
+    }
+
+    header h1{
+      font-size: clamp(18px, 3vw, 24px);
+      margin:0 0 4px 0;
+      letter-spacing:0.2px;
+      background: linear-gradient(90deg, #fff, var(--accent-light));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-weight: 700;
+    }
+
+    header p{
+      margin:0;
+      color:var(--muted);
+      font-size: clamp(12px, 1.5vw, 14px);
+      max-width: 800px;
+      line-height: 1.5;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(clamp(280px, 100%, 320px),1fr));
+      gap: clamp(12px, 2vw, 18px);
+      margin-bottom: 32px;
+    }
+
+    .card{
+      background: linear-gradient(180deg, var(--glass), rgba(0,0,0,0.05));
+      border:1px solid var(--border);
+      padding: clamp(14px, 2vw, 20px);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px var(--shadow);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display:flex;
+      flex-direction:column;
+      gap: clamp(8px, 1.5vw, 12px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      position: relative;
+      overflow: hidden;
+      opacity: 0.95;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .card:hover{ 
+      transform: translateY(-8px); 
+      box-shadow: 0 20px 40px var(--shadow-hover);
+      background: linear-gradient(180deg, var(--glass-hover), rgba(0,0,0,0.08));
+      opacity: 1;
+    }
+
+    .card:hover::before {
+      opacity: 1;
+    }
+
+    .title{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: clamp(8px, 1.5vw, 12px);
+      margin-bottom: 4px;
+    }
+
+    .title h2{
+      font-size: clamp(15px, 2vw, 18px);
+      margin:0;
+      font-weight: 600;
+      transition: color 0.2s ease;
+    }
+
+    .card:hover .title h2 {
+      color: var(--accent-light);
+    }
+
+    .desc{
+      color:var(--muted);
+      font-size: clamp(12px, 1.5vw, 14px);
+      line-height: 1.6;
+      margin:0;
+      min-height: 60px;
+      transition: color 0.2s ease;
+    }
+
+    .card:hover .desc {
+      color: #b0b9c6;
+    }
+
+    .meta{
+      display:flex;
+      gap: clamp(6px, 1vw, 8px);
+      align-items:center;
+      flex-wrap:wrap;
+      margin-top: auto;
+    }
+
+    .btn{
+      background:linear-gradient(90deg,var(--accent),var(--accent-light));
+      color:white;
+      padding: clamp(6px, 1.5vw, 10px) clamp(10px, 2vw, 14px);
+      border-radius: 10px;
+      text-decoration:none;
+      font-weight:600;
+      font-size: clamp(12px, 1.5vw, 14px);
+      box-shadow: 0 6px 18px rgba(59,130,246,0.2);
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .btn:hover{
+      background:linear-gradient(90deg,#2563eb,var(--accent));
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(59,130,246,0.3);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.secondary{
+      background: rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.1);
+      color:var(--muted);
+      font-weight:500;
+      box-shadow: none;
+    }
+
+    .btn.secondary:hover {
+      background: rgba(255,255,255,0.08);
+      color: #b0b9c6;
+      transform: none;
+      box-shadow: none;
+    }
+
+    footer{
+      margin-top: clamp(16px, 2vw, 24px);
+      color:var(--muted);
+      font-size: clamp(12px, 1.5vw, 13px);
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width:420px){
+      body{padding:16px;}
+      .card { padding: 16px; }
+      .title { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <h1>Webcam & Live Streams Quick Access</h1>
+      <p>Please respect privacy and comply with local laws.</p>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <article class="card">
+      <div class="title">
+        <h2>Insecam</h2>
+        <a class="btn" href="http://www.insecam.org/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">A directory of publicly exposed IP cameras. Many cameras may belong to private owners. Access responsibly and avoid any unauthorized use.</p>
+      <div class="meta"><span class="btn secondary">Type: IP Camera Directory</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>EarthCam</h2>
+        <a class="btn" href="https://www.earthcam.com/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">A globally recognized platform featuring live streams of major city landmarks, bridges, and tourist attractions.</p>
+      <div class="meta"><span class="btn secondary">Type: City Landmark Webcams</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>SkylineWebcams</h2>
+        <a class="btn" href="https://www.skylinewebcams.com/en.html" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">Known for high-quality live streams of European beaches, cities, and holiday destinations.</p>
+      <div class="meta"><span class="btn secondary">Type: Live Webcam Platform</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>Windy</h2>
+        <a class="btn" href="https://www.windy.com/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">Primarily a weather visualization platform that also integrates selected live webcams worldwide.</p>
+      <div class="meta"><span class="btn secondary">Type: Weather & Maps</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>Opentopia</h2>
+        <a class="btn" href="https://www.opentopia.com/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">A collection of public and commercial webcams for quick global viewing access.</p>
+      <div class="meta"><span class="btn secondary">Type: Public Webcam Index</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>EarthTV</h2>
+        <a class="btn" href="https://www.earthtv.com/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">Provides professional live travel and city channels with curated real-time streams.</p>
+      <div class="meta"><span class="btn secondary">Type: Live Travel TV</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>WorldCam</h2>
+        <a class="btn" href="https://worldcam.eu/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">A Europe-focused webcam directory and map for quickly locating city live feeds.</p>
+      <div class="meta"><span class="btn secondary">Type: European Webcam Directory</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>WebcamTravels</h2>
+        <a class="btn" href="https://webcamtravels.com/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">An interactive global webcam map aggregator for browsing live streams by location.</p>
+      <div class="meta"><span class="btn secondary">Type: Webcam Map Aggregator</span></div>
+    </article>
+
+    <article class="card">
+      <div class="title">
+        <h2>MyLiveStreams</h2>
+        <a class="btn" href="https://www.mylivestreams.com/" target="_blank" rel="noopener noreferrer">Visit</a>
+      </div>
+      <p class="desc">A diverse directory of live streams including cities, beaches, and traffic cameras.</p>
+      <div class="meta"><span class="btn secondary">Type: Live Streams Directory</span></div>
+    </article>
+
+  </main>
+
+  <footer>
+    <p>This page only provides navigation links. All content copyrights belong to their respective websites.</p>
+  </footer>
+</body>
+</html>
