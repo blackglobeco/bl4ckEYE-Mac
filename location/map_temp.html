@@ -1,0 +1,314 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>BloodCat Map @ S-H4CK13</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+html, body, #map { height: 100%; margin:0; padding:0; background-color:#000; }
+
+.cursor-map { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[ ]</text></svg>') 12 12, auto !important; }
+.cursor-marker, .cursor-marker:hover { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[+]</text></svg>') 12 12, pointer !important; }
+
+.ip-tooltip{ background: rgba(0,0,0,0.78); color:#fff; font-size:12px; padding:6px 10px; border-radius:6px; pointer-events: none; }
+.leaflet-marker-icon {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[+]</text></svg>') 12 12, pointer !important;
+}
+
+#searchBox { position:absolute; top:10px; right:10px; z-index:9999; background:rgba(0,0,0,0.7); color:#fff; padding:6px; border-radius:6px; width:220px; font-family:"Segoe UI", Arial, sans-serif; }
+
+#searchInput { width:100%; padding:4px 6px; border-radius:4px; border:none; outline:none; background:#222; color:#0f0;}
+#searchResults { max-height:150px; overflow-y:auto; margin-top:4px; font-size:12px;}
+.searchItem { padding:4px; cursor:pointer;}
+.searchItem:hover { background: rgba(0,255,0,0.2); }
+
+
+#statusBox { position:absolute; left:10px; bottom:10px; z-index:9999; background:rgba(0,0,0,0.7); color:#fff; padding:6px; border-radius:6px; width:320px; font-family:"Segoe UI", Arial, sans-serif; box-sizing:border-box; display:flex; flex-direction:column; }
+#statusHeader { display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:6px; }
+.statusDot { width:10px; height:10px; border-radius:50%; display:inline-block; background:#888; box-shadow:0 0 6px rgba(0,0,0,0.6); }
+
+
+#urlRow { display:flex; gap:6px; margin-bottom:6px; }
+#urlInput { flex:1; padding:6px; border-radius:4px; border:none; outline:none; background:#222; color:#0f0; font-size:12px; }
+#urlBtn { padding:6px 8px; border-radius:4px; border:none; background:#0a0; color:#000; cursor:pointer; font-weight:bold; }
+
+
+#statusList { max-height:160px; overflow-y:auto; font-size:12px; padding-top:4px; }
+#statusList::-webkit-scrollbar { width:6px; }
+#statusList::-webkit-scrollbar-track { background:rgba(0,0,0,0.3); border-radius:3px; }
+#statusList::-webkit-scrollbar-thumb { background:rgba(0,255,0,0.5); border-radius:3px; }
+
+.statusItem { display:flex; align-items:center; gap:8px; padding:6px; cursor:pointer; border-radius:4px; background: rgba(255,255,255,0.01); }
+.statusItem:hover { background: rgba(0,255,0,0.04); }
+.statusThumb { width:36px; height:22px; object-fit:cover; border-radius:3px; border:1px solid rgba(255,255,255,0.06); background:#111; }
+.statusText { color:#0f0; font-size:12px; margin-left:6px; }
+.statusSub { color:#ccc; font-size:11px; margin-left:auto; margin-right:8px; }
+.delBtn { background:transparent; border:1px solid rgba(255,255,255,0.06); color:#f77; padding:2px 6px; border-radius:3px; cursor:pointer; font-weight:bold; }
+#chatBox {
+    margin-top: 6px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 6px;
+    padding: 6px;
+    font-family: "Segoe UI", Arial, sans-serif;
+
+    height: 200px;
+    max-height: 200px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+}
+#chatLog {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 12px;
+    color: #0f0;
+    word-break: break-all;
+}
+#chatInputRow {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+#chatInput {
+    flex:1;
+    padding:4px 6px;
+    border-radius:4px;
+    border:none;
+    outline:none;
+    background:#222;
+    color:#0f0;
+}
+#chatSend {
+    padding:4px 8px;
+    border-radius:4px;
+    border:none;
+    background:#0a0;
+    color:#000;
+    font-weight:bold;
+    cursor:pointer;
+}
+.chatLine {
+    margin-bottom:4px;
+}
+ 
+@media (max-width:480px){ #statusBox { width:260px; } #searchBox { width:180px; } }
+
+</style>
+</head>
+<body>
+
+<div id="map" class="cursor-map"></div>
+
+<div id="searchBox">
+    <input type="text" id="searchInput" placeholder="Search IP / ASN / Network"/>
+    <div id="searchResults"></div>
+    <div id="chatBox">
+    <div id="chatLog"></div>
+    <div id="chatInputRow">
+        <input id="chatInput" placeholder="Send message..." />
+        <button id="chatSend">Send</button>
+    </div>
+</div>
+</div>
+
+<div id="statusBox" aria-live="polite">
+    <div id="statusHeader">
+        <span class="statusDot" id="dbDot" title="DB status"></span>
+        <strong>Remote Databases</strong>
+    </div>
+    <div id="urlRow">
+        <input id="urlInput" placeholder="Enter remote DB URL (http://...)"/>
+        <button id="urlBtn">Get</button>
+    </div>
+    <div id="statusList"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+let map = L.map('map').setView([20,0],2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+ 
+
+let markers = {}, rtspMap = {}, dataStore = {};
+const iconCache = {};
+function getIconForPath(path){ if(!path) return icon_main; if(iconCache[path]) return iconCache[path]; try{ const ic=L.icon({iconUrl:path,iconSize:[32,32],iconAnchor:[16,32]}); iconCache[path]=ic; return ic;}catch(e){return icon_main;} }
+
+let bridge=null;
+new QWebChannel(qt.webChannelTransport,function(channel){
+    bridge=channel.objects.bridge;
+    console.log('WebChannel initialized, bridge=',bridge);
+    window.renderStatusList(); 
+});
+
+ 
+function getRemoteUrlsAsync(cb){
+    try{
+        const maybe = bridge && bridge.getRemoteUrls && bridge.getRemoteUrls();
+        if(typeof maybe==='string'){ setTimeout(()=>{try{cb(JSON.parse(maybe||'[]'))}catch(e){cb([])}},0); return;}
+    }catch(e){}
+    try{
+        bridge.getRemoteUrls(function(s){ setTimeout(()=>{try{cb(JSON.parse(s||'[]'))}catch(e){cb([])}},0); });
+    }catch(e){ setTimeout(()=>cb([]),0);} 
+}
+
+let renderPending=null, renderInProgress=false;
+function scheduleRenderStatusList(delay=100){ if(renderPending) clearTimeout(renderPending); renderPending=setTimeout(()=>{ renderPending=null; if(renderInProgress){ scheduleRenderStatusList(120); return;} doRenderStatusList(); }, delay); }
+document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    const resultsDiv = document.getElementById('searchResults');
+    resultsDiv.innerHTML = '';
+    if (!q) return;
+
+    for (let ip in dataStore) {
+        const item = dataStore[ip];
+        const text = `${ip} ${item.asn||''} ${item.network||''} ${item.sys_org||''}`.toLowerCase();
+        if (text.includes(q)) {
+            const div = document.createElement('div');
+            div.className = 'searchItem';
+            div.textContent = ip + (item.sys_org ? ' - ' + item.sys_org : '');
+            div.onclick = () => {
+                
+                const coords = (''+item.lalo).split(',').map(x=>parseFloat(x));
+                if (coords.length>=2) map.setView([coords[0], coords[1]],10);
+                if (markers[ip]) markers[ip].openPopup();
+            };
+            resultsDiv.appendChild(div);
+        }
+    }
+});
+function doRenderStatusList(){
+    renderInProgress=true;
+    const statusListDiv=document.getElementById('statusList'); statusListDiv.innerHTML='';
+    const slotCount=10;
+    getRemoteUrlsAsync(function(remoteUrls){
+        try{
+            remoteUrls = remoteUrls||[];
+            const clean=[]; const seen=new Set();
+            for(let u of remoteUrls){ if(!u) continue; u=String(u).trim(); if(!u) continue; if(seen.has(u)) continue; seen.add(u); clean.push(u); if(clean.length>=slotCount) break;}
+            for(let i=0;i<slotCount;i++){
+                const slotIdx=i+1;
+                const img=`./color_${slotIdx}.png`;
+                const url=clean[i]||null;
+                const displayText=url?(url.length>32?url.slice(0,30)+'..':url):'Empty';
+                const div=document.createElement('div'); div.className='statusItem';
+                div.className = 'statusItem cursor-marker';
+                div.innerHTML=`
+                    <img src="${img}" class="statusThumb" alt="thumb"/>
+                    <div class="statusText" title="${url||''}">${displayText}</div>
+                    <div class="statusSub">[x_x]</div>
+                    <button class="delBtn" data-slot="${i}" title="Remove">x</button>`;
+                div.onclick=(ev)=>{ if(ev.target&&ev.target.classList&&ev.target.classList.contains('delBtn')) return; if(!url) return;
+                    let ipFound=null; for(let ip in dataStore){ try{ if(dataStore[ip]&&dataStore[ip].source_url===url){ipFound=ip; break;} }catch(e){} }
+                    if(ipFound && dataStore[ipFound] && dataStore[ipFound].lalo){ const parts=(''+dataStore[ipFound].lalo).split(',').map(x=>parseFloat(x)); if(parts.length>=2) map.setView([parts[0],parts[1]],10); if(markers[ipFound]) markers[ipFound].openPopup(); }
+                    else setIpSubStatus('', 'No host mapped');
+                };
+                const delBtn=div.querySelector('.delBtn'); 
+                delBtn.onclick=(ev)=>{ ev.stopPropagation(); const slot=parseInt(ev.target.getAttribute('data-slot')); if(!clean[slot]){ setIpSubStatus(displayText,'Nothing'); return;}
+                    const targetUrl=clean[slot]; try{ if(bridge&&bridge.removeRemoteUrl){ const res=bridge.removeRemoteUrl(targetUrl); setTimeout(()=>{ try{ const obj=JSON.parse(res); if(obj.ok){ setIpSubStatus(displayText,'Removed'); scheduleRenderStatusList(120); } else { setIpSubStatus(displayText,'Remove failed'); } }catch(e){ setIpSubStatus(displayText,'Removed'); scheduleRenderStatusList(120); } },0);} else { setIpSubStatus(displayText,'No bridge');} }catch(e){console.warn(e); setIpSubStatus(displayText,'Error');}
+                };
+                statusListDiv.appendChild(div);
+            }
+            console.log('[doRenderStatusList] sanitized:', clean);
+        }finally{ setTimeout(()=>{ renderInProgress=false; },60);} 
+    });
+}
+window.renderStatusList=function(){ scheduleRenderStatusList(0); };
+
+function updateMarkers(data_obj){
+    dataStore=data_obj||{};
+    for(let ip in markers){ if(!(ip in dataStore)){ map.removeLayer(markers[ip]); delete markers[ip]; delete rtspMap[ip];} }
+    for(let ip in dataStore){
+        const item=dataStore[ip]; const parts=(''+item.lalo).split(',').map(x=>parseFloat(x)); if(parts.length<2||isNaN(parts[0])||isNaN(parts[1])) continue;
+        const coords=[parts[0],parts[1]]; rtspMap[ip]=item.rtsp;
+        let chosenIcon=getIconForPath(item.icon);
+        if(markers[ip]){ markers[ip].setLatLng(coords); try{ markers[ip].setIcon(chosenIcon);}catch(e){} } 
+        else{
+            const m=L.marker(coords,{icon:chosenIcon}).addTo(map); markers[ip]=m;
+            const infoHtml=`${ip}<br>${item.sys_org||''}<br>ASN: ${item.asn||''}<br>${item.network||''}`;
+            m.bindTooltip(infoHtml,{permanent:false,direction:'top',offset:[0,-35],className:'ip-tooltip'});
+            m.bindPopup(infoHtml);
+            m.on('click',()=>{ if(bridge && bridge.playRTSP) { try{ bridge.playRTSP(item.rtsp); }catch(e){console.error('bridge.playRTSP error',e);} } });
+        }
+    }
+    window.renderStatusList();
+}
+
+function setDbStatus(status){ const dbDot=document.getElementById('dbDot'); let color='#888'; const s=(status||'').toLowerCase(); if(s==='connected'||s==='ok'||s==='online') color='#0f0'; else if(s==='degraded'||s==='partial') color='#ffa500'; else if(s==='disconnected'||s==='down'||s==='offline') color='#f00'; dbDot.style.background=color; }
+function setIpSubStatus(ip,text){ const subElems=document.querySelectorAll('.statusItem .statusText'); for(const el of subElems){ if(el.textContent===ip){ const sub=el.parentNode.querySelector('.statusSub'); if(sub) sub.textContent=text; break;}} window.renderStatusList(); }
+
+document.addEventListener('DOMContentLoaded',function(){
+    const urlBtn=document.getElementById('urlBtn'); const urlInput=document.getElementById('urlInput');
+    urlBtn.addEventListener('click',()=>{ const url=(urlInput.value||'').trim(); if(!url) return; if(!bridge||!bridge.addRemoteUrl){ alert('Bridge not ready'); return;}
+        try{ const res=bridge.addRemoteUrl(url); try{ const obj=JSON.parse(res); if(obj.ok){ urlInput.value=''; window.renderStatusList(); setIpSubStatus('','Added');} else{ alert('Add failed: '+(obj.msg||''));} }catch(e){ window.renderStatusList(); } }catch(e){ console.warn(e);} });
+});
+const snapRadius = 20;
+
+map.on('mousemove', function(e){
+    const mousePoint = map.latLngToContainerPoint(e.latlng);
+    for(let ip in markers){
+        const marker = markers[ip];
+        if(!marker) continue;
+        const icon = marker.options.icon.options;
+        const iconSize = icon.iconSize || [32,32];
+        const iconAnchor = icon.iconAnchor || [16,32];
+
+        const markerPoint = map.latLngToContainerPoint(marker.getLatLng());
+        const centerOffsetX = iconSize[0]/2 - iconAnchor[0];
+        const centerOffsetY = iconSize[1]/2 - iconAnchor[1];
+        const centerPoint = L.point(markerPoint.x + centerOffsetX, markerPoint.y + centerOffsetY);
+
+        const dx = centerPoint.x - mousePoint.x;
+        const dy = centerPoint.y - mousePoint.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if(dist <= snapRadius){
+            if(bridge && bridge.snapMouse){
+                bridge.snapMouse(centerPoint.x, centerPoint.y);
+            }
+            break;
+        }
+    }
+});
+function escapeHtml(str){
+    return String(str)
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#39;");
+}
+
+function appendChatLine(text){
+    const div = document.createElement("div");
+    div.className = "chatLine";
+    div.innerHTML = escapeHtml(text);
+    const log = document.getElementById("chatLog");
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+}
+
+document.getElementById("chatSend").onclick = sendChat;
+document.getElementById("chatInput").addEventListener("keydown", e=>{
+    if(e.key==="Enter") sendChat();
+});
+
+function sendChat(){
+    const input = document.getElementById("chatInput");
+    const msg = input.value.trim();
+    if(!msg) return;
+    input.value = "";
+    if(bridge && bridge.sendChat){
+        bridge.sendChat(msg);
+    }
+}
+</script>
+</body>
+</html>
+
