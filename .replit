@@ -1,0 +1,6 @@
+modules = ["python-3.12", "web", "lua-5.2"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
