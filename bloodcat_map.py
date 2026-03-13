@@ -404,7 +404,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const map = L.map('map').setView([20, 0], 2);
+const map = L.map('map', { minZoom: 2, worldCopyJump: false }).setView([20, 10], 2);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
     subdomains: 'abcd', maxZoom: 19
