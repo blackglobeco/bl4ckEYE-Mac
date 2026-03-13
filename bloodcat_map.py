@@ -188,28 +188,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 .searchItem { padding: 4px 6px; cursor: pointer; border-radius: 3px; }
 .searchItem:hover { background: rgba(0,255,0,0.15); }
 
-#statusBox {
-    position: absolute; left: 10px; bottom: 10px; z-index: 9999;
-    background: rgba(0,0,0,0.82); color: #fff; padding: 8px;
-    border-radius: 8px; width: 320px;
-    border: 1px solid rgba(0,255,0,0.15);
-    display: flex; flex-direction: column;
-}
-#statusHeader { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 6px; }
-.statusDot { width: 10px; height: 10px; border-radius: 50%; background: #888; display: inline-block; }
-#urlRow { display: flex; gap: 6px; margin-bottom: 6px; }
-#urlInput { flex: 1; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #0f0; font-size: 12px; }
-#urlBtn { padding: 5px 10px; border-radius: 4px; border: none; background: #090; color: #0f0; cursor: pointer; font-weight: bold; }
-#urlBtn:hover { background: #0b0; }
-#statusList { max-height: 160px; overflow-y: auto; font-size: 12px; }
-#statusList::-webkit-scrollbar { width: 5px; }
-#statusList::-webkit-scrollbar-thumb { background: rgba(0,255,0,0.4); border-radius: 3px; }
-.statusItem { display: flex; align-items: center; gap: 6px; padding: 5px; cursor: pointer; border-radius: 4px; }
-.statusItem:hover { background: rgba(0,255,0,0.06); }
-.statusThumb { width: 36px; height: 22px; object-fit: cover; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); background: #111; }
-.statusText { color: #0f0; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.delBtn { background: transparent; border: 1px solid rgba(255,80,80,0.3); color: #f77; padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
-.delBtn:hover { background: rgba(255,80,80,0.15); }
 
 #markerCount {
     position: absolute; top: 10px; left: 60px; z-index: 9999;
@@ -333,7 +311,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 #cctvInfoTable td:first-child { color: #0a0; width: 76px; }
 
 @media (max-width: 480px) {
-    #statusBox { width: 250px; }
     #searchBox { width: 175px; }
     #cctvModalBox { width: 99vw; }
     #cctvPreviewArea { height: 200px; }
@@ -350,18 +327,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     <div id="searchResults"></div>
 </div>
 
-<div id="statusBox">
-    <div id="statusHeader">
-        <span class="statusDot" id="dbDot"></span>
-        <strong>Remote Databases</strong>
-        <span style="margin-left:auto;font-size:11px;color:#555" id="lastRefresh"></span>
-    </div>
-    <div id="urlRow">
-        <input id="urlInput" placeholder="Enter remote DB URL (http://...)"/>
-        <button id="urlBtn">Get</button>
-    </div>
-    <div id="statusList"></div>
-</div>
 
 <!-- CCTV Modal -->
 <div id="cctvModal">
@@ -594,65 +559,14 @@ document.getElementById('searchInput').addEventListener('input', function() {
     }
 });
 
-// ========= Remote DB list =========
-function renderStatusList() {
-    fetch('/api/config').then(r => r.json()).then(urls => {
-        const list = document.getElementById('statusList');
-        list.innerHTML = '';
-        const clean = [...new Set((urls||[]).filter(Boolean).map(u=>String(u).trim()).filter(Boolean))].slice(0,10);
-        for (let i = 0; i < 10; i++) {
-            const url = clean[i] || null;
-            const display = url ? (url.length > 34 ? url.slice(0,32)+'..' : url) : 'Empty';
-            const div = document.createElement('div');
-            div.className = 'statusItem';
-            div.innerHTML = `
-                <img src="/location/color_${i+1}.png" class="statusThumb" alt=""/>
-                <div class="statusText" title="${url||''}">${display}</div>
-                ${url ? `<button class="delBtn" data-url="${encodeURIComponent(url)}">x</button>` : ''}`;
-            if (url) {
-                div.onclick = (ev) => {
-                    if (ev.target.classList.contains('delBtn')) return;
-                    for (let ip in dataStore) {
-                        if (dataStore[ip].source_url === url) {
-                            const p = (''+dataStore[ip].lalo).split(',').map(x=>parseFloat(x));
-                            if (p.length>=2) map.setView([p[0],p[1]],10); break;
-                        }
-                    }
-                };
-                div.querySelector('.delBtn').onclick = (ev) => {
-                    ev.stopPropagation();
-                    const u = decodeURIComponent(ev.target.getAttribute('data-url'));
-                    fetch('/api/config',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})})
-                        .then(r=>r.json()).then(()=>{ renderStatusList(); loadData(); });
-                };
-            }
-            list.appendChild(div);
-        }
-    });
-}
-
-document.getElementById('urlBtn').onclick = () => {
-    const url = document.getElementById('urlInput').value.trim();
-    if (!url) return;
-    fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})})
-        .then(r=>r.json()).then(res => {
-            if (res.ok) { document.getElementById('urlInput').value=''; renderStatusList(); loadData(); }
-            else alert(res.msg || 'Failed to add URL');
-        });
-};
-
 // ========= Data =========
 function loadData() {
-    document.getElementById('dbDot').style.background = '#fa0';
     fetch('/api/data').then(r=>r.json()).then(data => {
         updateMarkers(data);
-        document.getElementById('dbDot').style.background = '#0f0';
-        document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
-    }).catch(() => { document.getElementById('dbDot').style.background = '#f00'; });
+    }).catch(() => {});
 }
 
 loadData();
-renderStatusList();
 setInterval(loadData, 60000);
 </script>
 </body>
