@@ -212,7 +212,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 .delBtn:hover { background: rgba(255,80,80,0.15); }
 
 #markerCount {
-    position: absolute; top: 10px; left: 10px; z-index: 9999;
+    position: absolute; top: 10px; left: 60px; z-index: 9999;
     background: rgba(0,0,0,0.75); color: #0f0; padding: 5px 10px;
     border-radius: 6px; font-size: 12px; border: 1px solid rgba(0,255,0,0.15);
 }
