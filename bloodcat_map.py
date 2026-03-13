@@ -456,27 +456,23 @@ const spinner     = document.getElementById('previewSpinner');
 const spinnerMsg  = document.getElementById('spinnerMsg');
 const liveBadge   = document.getElementById('liveBadge');
 const btnLive     = document.getElementById('btnLive');
-const btnSnap     = document.getElementById('btnSnap');
 
 function showSpinner(msg) {
-    streamImg.style.display = 'none';
-    snapImg.style.display   = 'none';
+    streamImg.style.display  = 'none';
     previewMsg.style.display = 'none';
-    spinner.style.display   = 'flex';
-    spinnerMsg.textContent  = msg || 'Connecting...';
+    spinner.style.display    = 'flex';
+    spinnerMsg.textContent   = msg || 'Connecting...';
 }
 function showMsg(html) {
-    streamImg.style.display = 'none';
-    snapImg.style.display   = 'none';
-    spinner.style.display   = 'none';
+    streamImg.style.display  = 'none';
+    spinner.style.display    = 'none';
     previewMsg.style.display = 'flex';
-    previewMsg.innerHTML    = html;
+    previewMsg.innerHTML     = html;
 }
 function showStream() {
-    snapImg.style.display   = 'none';
     previewMsg.style.display = 'none';
-    spinner.style.display   = 'none';
-    streamImg.style.display = 'block';
+    spinner.style.display    = 'none';
+    streamImg.style.display  = 'block';
 }
 function stopStream() {
     streamActive = false;
@@ -538,7 +534,7 @@ function openCctvModal(ip, item) {
     stopStream();
     showMsg(
         '<span class="icon">&#128247;</span>' +
-        '<span>Click <b style="color:#0f0">\u25B6 Live Stream</b> to watch<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>'
+        '<span>Click <b style="color:#0f0">\u25B6 Live Stream</b> to watch the camera</span>'
     );
     modal.classList.add('open');
 }
