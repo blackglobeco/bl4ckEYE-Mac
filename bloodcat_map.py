@@ -322,8 +322,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 #btnLive { background: rgba(0,255,0,0.1); color: #0f0; border: 1px solid rgba(0,255,0,0.25); }
 #btnLive:hover { background: rgba(0,255,0,0.2); }
 #btnLive.streaming { background: rgba(255,60,60,0.1); color: #f77; border-color: rgba(255,60,60,0.3); }
-#btnSnap { background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); }
-#btnSnap:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
 /* Info table */
 #cctvInfoTable {
@@ -336,20 +334,14 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 /* RTSP row */
 #cctvRtspRow {
-    padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    padding: 8px 12px; flex-shrink: 0;
 }
 #cctvRtspUrl {
-    flex: 1; background: #111; border: 1px solid rgba(0,255,0,0.12);
+    width: 100%; background: #111; border: 1px solid rgba(0,255,0,0.12);
     color: #777; padding: 5px 8px; border-radius: 4px; font-size: 10px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-family: monospace;
 }
-#cctvCopyBtn {
-    padding: 5px 10px; border-radius: 4px; border: none;
-    background: rgba(0,255,0,0.1); color: #0f0; cursor: pointer;
-    font-size: 11px; white-space: nowrap; border: 1px solid rgba(0,255,0,0.2);
-}
-#cctvCopyBtn:hover { background: rgba(0,255,0,0.2); }
 
 @media (max-width: 480px) {
     #statusBox { width: 250px; }
@@ -394,12 +386,10 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
         <div id="previewActions">
             <button class="actionBtn" id="btnLive">&#9654; Live Stream</button>
-            <button class="actionBtn" id="btnSnap">&#128247; Snapshot</button>
         </div>
 
         <div id="cctvPreviewArea">
             <img id="cctvStreamImg" alt="Live stream"/>
-            <img id="cctvSnapshotImg" alt="Snapshot"/>
             <div id="previewSpinner">
                 <div class="spinner-ring"></div>
                 <span id="spinnerMsg">Connecting...</span>
@@ -422,7 +412,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
         <div id="cctvRtspRow">
             <div id="cctvRtspUrl">-</div>
-            <button id="cctvCopyBtn">Copy URL</button>
         </div>
 
     </div>
@@ -462,7 +451,6 @@ let streamActive = false;
 
 const modal       = document.getElementById('cctvModal');
 const streamImg   = document.getElementById('cctvStreamImg');
-const snapImg     = document.getElementById('cctvSnapshotImg');
 const previewMsg  = document.getElementById('previewMsg');
 const spinner     = document.getElementById('previewSpinner');
 const spinnerMsg  = document.getElementById('spinnerMsg');
@@ -490,13 +478,6 @@ function showStream() {
     spinner.style.display   = 'none';
     streamImg.style.display = 'block';
 }
-function showSnap() {
-    streamImg.style.display = 'none';
-    previewMsg.style.display = 'none';
-    spinner.style.display   = 'none';
-    snapImg.style.display   = 'block';
-}
-
 function stopStream() {
     streamActive = false;
     streamImg.src = '';
@@ -541,26 +522,6 @@ function startLiveStream() {
     // Show spinner immediately; onerror fires if stream totally fails
 }
 
-function loadSnapshot() {
-    if (!currentRtsp) return;
-    const m = currentRtsp.match(/@([\d\.]+):/);
-    if (!m) { showMsg('<span class="icon">&#10060;</span><span>Cannot extract IP</span>'); return; }
-    const ip = m[1];
-
-    stopStream();
-    showSpinner('Fetching snapshot...');
-
-    const ts = Date.now();
-    snapImg.onload = () => { showSnap(); };
-    snapImg.onerror = () => {
-        showMsg(
-            '<span class="icon">&#10060;</span>' +
-            '<span>No snapshot available.<br>' +
-            '<small style="color:#555">Camera may be offline or HTTP not exposed.</small></span>'
-        );
-    };
-    snapImg.src = `/api/snapshot/${ip}?t=${ts}`;
-}
 
 function openCctvModal(ip, item) {
     currentRtsp = item.rtsp || null;
@@ -583,7 +544,6 @@ function openCctvModal(ip, item) {
 }
 
 btnLive.onclick = startLiveStream;
-btnSnap.onclick = loadSnapshot;
 
 document.getElementById('cctvModalClose').onclick = () => {
     stopStream();
@@ -597,16 +557,6 @@ modal.addEventListener('click', (e) => {
         currentRtsp = null;
     }
 });
-
-document.getElementById('cctvCopyBtn').onclick = () => {
-    const url = document.getElementById('cctvRtspUrl').textContent;
-    if (url && url !== '-') {
-        navigator.clipboard.writeText(url).then(() => {
-            document.getElementById('cctvCopyBtn').textContent = 'Copied!';
-            setTimeout(() => document.getElementById('cctvCopyBtn').textContent = 'Copy URL', 1500);
-        });
-    }
-};
 
 // ========= Markers =========
 function updateMarkers(data_obj) {
