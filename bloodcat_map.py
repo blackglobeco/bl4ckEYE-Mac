@@ -174,7 +174,7 @@ HTML = r'''<!DOCTYPE html>
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-family: "Segoe UI", Arial, sans-serif; }
 
-.cursor-map { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[ ]</text></svg>') 12 12, auto !important; }
+.cursor-map { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="24"><text x="0" y="18" font-size="18" fill="%23f44" font-weight="bold">[ ]</text></svg>') 12 12, auto !important; }
 .leaflet-marker-icon { cursor: pointer !important; }
 .ip-tooltip { background: rgba(0,0,0,0.78); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 6px; pointer-events: none; }
 
@@ -182,18 +182,18 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     position: absolute; top: 10px; right: 10px; z-index: 9999;
     background: rgba(0,0,0,0.82); color: #fff; padding: 8px;
     border-radius: 8px; width: 230px;
-    border: 1px solid rgba(0,255,0,0.15);
+    border: 1px solid rgba(255,50,50,0.15);
 }
-#searchInput { width: 100%; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #0f0; }
+#searchInput { width: 100%; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #f44; }
 #searchResults { max-height: 150px; overflow-y: auto; margin-top: 4px; font-size: 12px; }
 .searchItem { padding: 4px 6px; cursor: pointer; border-radius: 3px; }
-.searchItem:hover { background: rgba(0,255,0,0.15); }
+.searchItem:hover { background: rgba(255,50,50,0.15); }
 
 
 #markerCount {
     position: absolute; top: 10px; left: 50px; z-index: 9999;
-    background: rgba(0,0,0,0.75); color: #0f0; padding: 5px 10px;
-    border-radius: 6px; font-size: 12px; border: 1px solid rgba(0,255,0,0.15);
+    background: rgba(0,0,0,0.75); color: #f44; padding: 5px 10px;
+    border-radius: 6px; font-size: 12px; border: 1px solid rgba(255,50,50,0.15);
 }
 
 /* ---- Hack Box ---- */
@@ -260,10 +260,10 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 #cctvModalBox {
     background: #0d0d0d;
-    border: 1px solid rgba(0,255,0,0.3);
+    border: 1px solid rgba(255,50,50,0.3);
     border-radius: 10px;
     width: 520px; max-width: 96vw;
-    box-shadow: 0 0 50px rgba(0,255,0,0.12);
+    box-shadow: 0 0 50px rgba(255,50,50,0.12);
     overflow: hidden;
     display: flex; flex-direction: column;
 }
@@ -271,19 +271,19 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 #cctvModalHeader {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 14px;
-    background: rgba(0,255,0,0.07);
-    border-bottom: 1px solid rgba(0,255,0,0.15);
+    background: rgba(255,50,50,0.07);
+    border-bottom: 1px solid rgba(255,50,50,0.15);
     flex-shrink: 0;
 }
-#cctvModalTitle { color: #0f0; font-size: 14px; font-weight: bold; flex: 1; }
+#cctvModalTitle { color: #f44; font-size: 14px; font-weight: bold; flex: 1; }
 #liveBadge {
     display: none; align-items: center; gap: 4px;
-    font-size: 10px; color: #0f0; background: rgba(0,255,0,0.12);
-    border: 1px solid rgba(0,255,0,0.3); border-radius: 10px;
+    font-size: 10px; color: #f44; background: rgba(255,50,50,0.12);
+    border: 1px solid rgba(255,50,50,0.3); border-radius: 10px;
     padding: 2px 8px;
 }
 #liveDot {
-    width: 7px; height: 7px; border-radius: 50%; background: #0f0;
+    width: 7px; height: 7px; border-radius: 50%; background: #f44;
     animation: blink 1s infinite;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
@@ -296,7 +296,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 /* Tab bar */
 #tabBar {
-    display: flex; border-bottom: 1px solid rgba(0,255,0,0.1);
+    display: flex; border-bottom: 1px solid rgba(255,50,50,0.1);
     flex-shrink: 0;
 }
 .tab {
@@ -304,8 +304,8 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     color: #555; cursor: pointer; border: none;
     background: transparent; transition: all .15s;
 }
-.tab:hover { color: #0f0; background: rgba(0,255,0,0.04); }
-.tab.active { color: #0f0; border-bottom: 2px solid #0f0; background: rgba(0,255,0,0.06); }
+.tab:hover { color: #f44; background: rgba(255,50,50,0.04); }
+.tab.active { color: #f44; border-bottom: 2px solid #f44; background: rgba(255,50,50,0.06); }
 
 /* Preview area */
 #cctvPreviewArea {
@@ -330,12 +330,12 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 #previewSpinner {
     display: none; flex-direction: column; align-items: center; gap: 10px;
-    color: #0f0; font-size: 12px;
+    color: #f44; font-size: 12px;
 }
 .spinner-ring {
     width: 36px; height: 36px;
-    border: 3px solid rgba(0,255,0,0.15);
-    border-top-color: #0f0;
+    border: 3px solid rgba(255,50,50,0.15);
+    border-top-color: #f44;
     border-radius: 50%;
     animation: spin 0.9s linear infinite;
 }
@@ -351,8 +351,8 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     flex: 1; padding: 7px; border-radius: 5px; border: none;
     font-size: 12px; cursor: pointer; font-weight: bold; transition: all .15s;
 }
-#btnLive { background: rgba(0,255,0,0.1); color: #0f0; border: 1px solid rgba(0,255,0,0.25); }
-#btnLive:hover { background: rgba(0,255,0,0.2); }
+#btnLive { background: rgba(255,50,50,0.1); color: #f44; border: 1px solid rgba(255,50,50,0.25); }
+#btnLive:hover { background: rgba(255,50,50,0.2); }
 #btnLive.streaming { background: rgba(255,60,60,0.1); color: #f77; border-color: rgba(255,60,60,0.3); }
 
 /* Info table */
@@ -362,7 +362,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 }
 #cctvInfoTable table { width: 100%; border-collapse: collapse; }
 #cctvInfoTable td { padding: 3px 6px; }
-#cctvInfoTable td:first-child { color: #0a0; width: 76px; }
+#cctvInfoTable td:first-child { color: #f44; width: 76px; }
 
 @media (max-width: 480px) {
     #searchBox { width: 175px; }
@@ -413,7 +413,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
             </div>
             <div id="previewMsg">
                 <span class="icon">&#128247;</span>
-                <span>Click <b style="color:#0f0">Live Stream</b> to watch the camera<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>
+                <span>Click <b style="color:#f44">Live Stream</b> to watch the camera<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>
             </div>
         </div>
 
@@ -456,7 +456,7 @@ function makeIcon(path) {
 function makeDefaultIcon() {
     if (iconCache['__d']) return iconCache['__d'];
     const ic = L.divIcon({
-        html: '<div style="width:16px;height:16px;background:#0f0;border-radius:50%;border:2px solid #090;box-shadow:0 0 8px #0f0"></div>',
+        html: '<div style="width:16px;height:16px;background:#f44;border-radius:50%;border:2px solid #900;box-shadow:0 0 8px #f44"></div>',
         className:'', iconSize:[16,16], iconAnchor:[8,8]
     });
     iconCache['__d'] = ic; return ic;
@@ -550,7 +550,7 @@ function openCctvModal(ip, item) {
     stopStream();
     showMsg(
         '<span class="icon">&#128247;</span>' +
-        '<span>Click <b style="color:#0f0">\u25B6 Live Stream</b> to watch</span>'
+        '<span>Click <b style="color:#f44">\u25B6 Live Stream</b> to watch</span>'
     );
     modal.classList.add('open');
 }
