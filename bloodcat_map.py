@@ -1,552 +1,46 @@
 #!/usr/bin/python3
 # @Мартин.
-# ███████╗              ██╗  ██╗    ██╗  ██╗     ██████╗    ██╗  ██╗     ██╗    ██████╗
-# ██╔════╝              ██║  ██║    ██║  ██║    ██╔════╝    ██║ ██╔╝    ███║    ╚════██╗
-# ███████╗    █████╗    ███████║    ███████║    ██║         █████╔╝     ╚██║     █████╔╝
-# ╚════██║    ╚════╝    ██╔══██║    ╚════██║    ██║         ██╔═██╗      ██║     ╚═══██╗
-# ███████║              ██║  ██║         ██║    ╚██████╗    ██║  ██╗     ██║    ██████╔╝
-# ╚══════╝              ╚═╝  ╚═╝         ╚═╝     ╚═════╝    ╚═╝  ╚═╝     ╚═╝    ╚═════╝
 import os
 import sys
 import json
 import re
-import subprocess
-from lib.camlib import *
-from lib.log_cat import *
- 
+import time
 import threading
-from http.server import HTTPServer, SimpleHTTPRequestHandler
-from PyQt5.QtGui import QCursor
-from PyQt5.QtCore import QPoint
-from PyQt5.QtCore import (
-    Qt, QUrl, QTimer, QObject, pyqtSlot, QThread, pyqtSignal,
-    QPropertyAnimation, QEasingCurve, QSequentialAnimationGroup
-)
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QLabel, QGraphicsOpacityEffect
-)
-from PyQt5.QtGui import QPixmap, QIcon
-from PyQt5.QtWebEngineWidgets import QWebEngineView
-from PyQt5.QtWebChannel import QWebChannel
+import requests
+
+from flask import Flask, request, jsonify, Response, send_from_directory
+from lib.camlib import CamLib
+from lib.log_cat import LogCat
 from lib.version import VERSION
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+
 log = LogCat()
 cam = CamLib()
- 
+
 CONFIG_PATH = os.path.join('.', 'data', 'bloodcatmap.conf')
-SLOT_COUNT = 10  
+SLOT_COUNT = 10
 API_SER = 34713
-CHAT_SER = 34413 
+WEB_PORT = 5000
 
 os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
 if not os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         json.dump([], f)
 
+app = Flask(__name__, static_folder='location', static_url_path='/location')
 
-HTML = r'''
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>BloodCat Map @ S-H4CK13</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>
-html, body, #map { height: 100%; margin:0; padding:0; background-color:#000; }
-
-.cursor-map { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[ ]</text></svg>') 12 12, auto !important; }
-.cursor-marker, .cursor-marker:hover { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[+]</text></svg>') 12 12, pointer !important; }
-
-.ip-tooltip{ background: rgba(0,0,0,0.78); color:#fff; font-size:12px; padding:6px 10px; border-radius:6px; pointer-events: none; }
-.leaflet-marker-icon {
-    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[+]</text></svg>') 12 12, pointer !important;
-}
-
-#searchBox { position:absolute; top:10px; right:10px; z-index:9999; background:rgba(0,0,0,0.7); color:#fff; padding:6px; border-radius:6px; width:220px; font-family:"Segoe UI", Arial, sans-serif; }
-
-#searchInput { width:100%; padding:4px 6px; border-radius:4px; border:none; outline:none; background:#222; color:#0f0;}
-#searchResults { max-height:150px; overflow-y:auto; margin-top:4px; font-size:12px;}
-.searchItem { padding:4px; cursor:pointer;}
-.searchItem:hover { background: rgba(0,255,0,0.2); }
+LOGO = (
+    "\033[38;5;208m"
+    "[Maptnh@S-H4CK13]  [Blood Cat Map " + VERSION + "]  [https://github.com/MartinxMax]"
+    "\033[0m"
+)
 
 
-#statusBox { position:absolute; left:10px; bottom:10px; z-index:9999; background:rgba(0,0,0,0.7); color:#fff; padding:6px; border-radius:6px; width:320px; font-family:"Segoe UI", Arial, sans-serif; box-sizing:border-box; display:flex; flex-direction:column; }
-#statusHeader { display:flex; align-items:center; gap:8px; font-size:13px; margin-bottom:6px; }
-.statusDot { width:10px; height:10px; border-radius:50%; display:inline-block; background:#888; box-shadow:0 0 6px rgba(0,0,0,0.6); }
-
-
-#urlRow { display:flex; gap:6px; margin-bottom:6px; }
-#urlInput { flex:1; padding:6px; border-radius:4px; border:none; outline:none; background:#222; color:#0f0; font-size:12px; }
-#urlBtn { padding:6px 8px; border-radius:4px; border:none; background:#0a0; color:#000; cursor:pointer; font-weight:bold; }
-
-
-#statusList { max-height:160px; overflow-y:auto; font-size:12px; padding-top:4px; }
-#statusList::-webkit-scrollbar { width:6px; }
-#statusList::-webkit-scrollbar-track { background:rgba(0,0,0,0.3); border-radius:3px; }
-#statusList::-webkit-scrollbar-thumb { background:rgba(0,255,0,0.5); border-radius:3px; }
-
-.statusItem { display:flex; align-items:center; gap:8px; padding:6px; cursor:pointer; border-radius:4px; background: rgba(255,255,255,0.01); }
-.statusItem:hover { background: rgba(0,255,0,0.04); }
-.statusThumb { width:36px; height:22px; object-fit:cover; border-radius:3px; border:1px solid rgba(255,255,255,0.06); background:#111; }
-.statusText { color:#0f0; font-size:12px; margin-left:6px; }
-.statusSub { color:#ccc; font-size:11px; margin-left:auto; margin-right:8px; }
-.delBtn { background:transparent; border:1px solid rgba(255,255,255,0.06); color:#f77; padding:2px 6px; border-radius:3px; cursor:pointer; font-weight:bold; }
-#chatBox {
-    margin-top: 6px;
-    background: rgba(0,0,0,0.7);
-    border-radius: 6px;
-    padding: 6px;
-    font-family: "Segoe UI", Arial, sans-serif;
-
-    height: 200px;
-    max-height: 200px;
-    box-sizing: border-box;
-
-    display: flex;
-    flex-direction: column;
-}
-#chatLog {
-    flex: 1;
-    overflow-y: auto;
-    font-size: 12px;
-    color: #0f0;
-    word-break: break-all;
-}
-#chatInputRow {
-    flex-shrink: 0;
-    display: flex;
-    gap: 6px;
-    margin-top: 6px;
-}
-#chatInput {
-    flex:1;
-    padding:4px 6px;
-    border-radius:4px;
-    border:none;
-    outline:none;
-    background:#222;
-    color:#0f0;
-}
-#chatSend {
-    padding:4px 8px;
-    border-radius:4px;
-    border:none;
-    background:#0a0;
-    color:#000;
-    font-weight:bold;
-    cursor:pointer;
-}
-.chatLine {
-    margin-bottom:4px;
-}
- 
-@media (max-width:480px){ #statusBox { width:260px; } #searchBox { width:180px; } }
-
-</style>
-</head>
-<body>
-
-<div id="map" class="cursor-map"></div>
-
-<div id="searchBox">
-    <input type="text" id="searchInput" placeholder="Search IP / ASN / Network"/>
-    <div id="searchResults"></div>
-    <div id="chatBox">
-    <div id="chatLog"></div>
-    <div id="chatInputRow">
-        <input id="chatInput" placeholder="Send message..." />
-        <button id="chatSend">Send</button>
-    </div>
-</div>
-</div>
-
-<div id="statusBox" aria-live="polite">
-    <div id="statusHeader">
-        <span class="statusDot" id="dbDot" title="DB status"></span>
-        <strong>Remote Databases</strong>
-    </div>
-    <div id="urlRow">
-        <input id="urlInput" placeholder="Enter remote DB URL (http://...)"/>
-        <button id="urlBtn">Get</button>
-    </div>
-    <div id="statusList"></div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-<script>
-let map = L.map('map').setView([20,0],2);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    subdomains:'abcd', maxZoom:19
-}).addTo(map);
-
- 
-
-let markers = {}, rtspMap = {}, dataStore = {};
-const iconCache = {};
-function getIconForPath(path){ if(!path) return icon_main; if(iconCache[path]) return iconCache[path]; try{ const ic=L.icon({iconUrl:path,iconSize:[32,32],iconAnchor:[16,32]}); iconCache[path]=ic; return ic;}catch(e){return icon_main;} }
-
-let bridge=null;
-new QWebChannel(qt.webChannelTransport,function(channel){
-    bridge=channel.objects.bridge;
-    console.log('WebChannel initialized, bridge=',bridge);
-    window.renderStatusList(); 
-});
-
- 
-function getRemoteUrlsAsync(cb){
-    try{
-        const maybe = bridge && bridge.getRemoteUrls && bridge.getRemoteUrls();
-        if(typeof maybe==='string'){ setTimeout(()=>{try{cb(JSON.parse(maybe||'[]'))}catch(e){cb([])}},0); return;}
-    }catch(e){}
-    try{
-        bridge.getRemoteUrls(function(s){ setTimeout(()=>{try{cb(JSON.parse(s||'[]'))}catch(e){cb([])}},0); });
-    }catch(e){ setTimeout(()=>cb([]),0);} 
-}
-
-let renderPending=null, renderInProgress=false;
-function scheduleRenderStatusList(delay=100){ if(renderPending) clearTimeout(renderPending); renderPending=setTimeout(()=>{ renderPending=null; if(renderInProgress){ scheduleRenderStatusList(120); return;} doRenderStatusList(); }, delay); }
-document.getElementById('searchInput').addEventListener('input', function() {
-    const q = this.value.trim().toLowerCase();
-    const resultsDiv = document.getElementById('searchResults');
-    resultsDiv.innerHTML = '';
-    if (!q) return;
-
-    for (let ip in dataStore) {
-        const item = dataStore[ip];
-        const text = `${ip} ${item.asn||''} ${item.network||''} ${item.sys_org||''}`.toLowerCase();
-        if (text.includes(q)) {
-            const div = document.createElement('div');
-            div.className = 'searchItem';
-            div.textContent = ip + (item.sys_org ? ' - ' + item.sys_org : '');
-            div.onclick = () => {
-                
-                const coords = (''+item.lalo).split(',').map(x=>parseFloat(x));
-                if (coords.length>=2) map.setView([coords[0], coords[1]],10);
-                if (markers[ip]) markers[ip].openPopup();
-            };
-            resultsDiv.appendChild(div);
-        }
-    }
-});
-function doRenderStatusList(){
-    renderInProgress=true;
-    const statusListDiv=document.getElementById('statusList'); statusListDiv.innerHTML='';
-    const slotCount=10;
-    getRemoteUrlsAsync(function(remoteUrls){
-        try{
-            remoteUrls = remoteUrls||[];
-            const clean=[]; const seen=new Set();
-            for(let u of remoteUrls){ if(!u) continue; u=String(u).trim(); if(!u) continue; if(seen.has(u)) continue; seen.add(u); clean.push(u); if(clean.length>=slotCount) break;}
-            for(let i=0;i<slotCount;i++){
-                const slotIdx=i+1;
-                const img=`./color_${slotIdx}.png`;
-                const url=clean[i]||null;
-                const displayText=url?(url.length>32?url.slice(0,30)+'..':url):'Empty';
-                const div=document.createElement('div'); div.className='statusItem';
-                div.className = 'statusItem cursor-marker';
-                div.innerHTML=`
-                    <img src="${img}" class="statusThumb" alt="thumb"/>
-                    <div class="statusText" title="${url||''}">${displayText}</div>
-                    <div class="statusSub">[x_x]</div>
-                    <button class="delBtn" data-slot="${i}" title="Remove">x</button>`;
-                div.onclick=(ev)=>{ if(ev.target&&ev.target.classList&&ev.target.classList.contains('delBtn')) return; if(!url) return;
-                    let ipFound=null; for(let ip in dataStore){ try{ if(dataStore[ip]&&dataStore[ip].source_url===url){ipFound=ip; break;} }catch(e){} }
-                    if(ipFound && dataStore[ipFound] && dataStore[ipFound].lalo){ const parts=(''+dataStore[ipFound].lalo).split(',').map(x=>parseFloat(x)); if(parts.length>=2) map.setView([parts[0],parts[1]],10); if(markers[ipFound]) markers[ipFound].openPopup(); }
-                    else setIpSubStatus('', 'No host mapped');
-                };
-                const delBtn=div.querySelector('.delBtn'); 
-                delBtn.onclick=(ev)=>{ ev.stopPropagation(); const slot=parseInt(ev.target.getAttribute('data-slot')); if(!clean[slot]){ setIpSubStatus(displayText,'Nothing'); return;}
-                    const targetUrl=clean[slot]; try{ if(bridge&&bridge.removeRemoteUrl){ const res=bridge.removeRemoteUrl(targetUrl); setTimeout(()=>{ try{ const obj=JSON.parse(res); if(obj.ok){ setIpSubStatus(displayText,'Removed'); scheduleRenderStatusList(120); } else { setIpSubStatus(displayText,'Remove failed'); } }catch(e){ setIpSubStatus(displayText,'Removed'); scheduleRenderStatusList(120); } },0);} else { setIpSubStatus(displayText,'No bridge');} }catch(e){console.warn(e); setIpSubStatus(displayText,'Error');}
-                };
-                statusListDiv.appendChild(div);
-            }
-            console.log('[doRenderStatusList] sanitized:', clean);
-        }finally{ setTimeout(()=>{ renderInProgress=false; },60);} 
-    });
-}
-window.renderStatusList=function(){ scheduleRenderStatusList(0); };
-
-function updateMarkers(data_obj){
-    dataStore=data_obj||{};
-    for(let ip in markers){ if(!(ip in dataStore)){ map.removeLayer(markers[ip]); delete markers[ip]; delete rtspMap[ip];} }
-    for(let ip in dataStore){
-        const item=dataStore[ip]; const parts=(''+item.lalo).split(',').map(x=>parseFloat(x)); if(parts.length<2||isNaN(parts[0])||isNaN(parts[1])) continue;
-        const coords=[parts[0],parts[1]]; rtspMap[ip]=item.rtsp;
-        let chosenIcon=getIconForPath(item.icon);
-        if(markers[ip]){ markers[ip].setLatLng(coords); try{ markers[ip].setIcon(chosenIcon);}catch(e){} } 
-        else{
-            const m=L.marker(coords,{icon:chosenIcon}).addTo(map); markers[ip]=m;
-            const infoHtml=`${ip}<br>${item.sys_org||''}<br>ASN: ${item.asn||''}<br>${item.network||''}`;
-            m.bindTooltip(infoHtml,{permanent:false,direction:'top',offset:[0,-35],className:'ip-tooltip'});
-            m.bindPopup(infoHtml);
-            m.on('click',()=>{ if(bridge && bridge.playRTSP) { try{ bridge.playRTSP(item.rtsp); }catch(e){console.error('bridge.playRTSP error',e);} } });
-        }
-    }
-    window.renderStatusList();
-}
-
-function setDbStatus(status){ const dbDot=document.getElementById('dbDot'); let color='#888'; const s=(status||'').toLowerCase(); if(s==='connected'||s==='ok'||s==='online') color='#0f0'; else if(s==='degraded'||s==='partial') color='#ffa500'; else if(s==='disconnected'||s==='down'||s==='offline') color='#f00'; dbDot.style.background=color; }
-function setIpSubStatus(ip,text){ const subElems=document.querySelectorAll('.statusItem .statusText'); for(const el of subElems){ if(el.textContent===ip){ const sub=el.parentNode.querySelector('.statusSub'); if(sub) sub.textContent=text; break;}} window.renderStatusList(); }
-
-document.addEventListener('DOMContentLoaded',function(){
-    const urlBtn=document.getElementById('urlBtn'); const urlInput=document.getElementById('urlInput');
-    urlBtn.addEventListener('click',()=>{ const url=(urlInput.value||'').trim(); if(!url) return; if(!bridge||!bridge.addRemoteUrl){ alert('Bridge not ready'); return;}
-        try{ const res=bridge.addRemoteUrl(url); try{ const obj=JSON.parse(res); if(obj.ok){ urlInput.value=''; window.renderStatusList(); setIpSubStatus('','Added');} else{ alert('Add failed: '+(obj.msg||''));} }catch(e){ window.renderStatusList(); } }catch(e){ console.warn(e);} });
-});
-const snapRadius = 20;
-
-map.on('mousemove', function(e){
-    const mousePoint = map.latLngToContainerPoint(e.latlng);
-    for(let ip in markers){
-        const marker = markers[ip];
-        if(!marker) continue;
-        const icon = marker.options.icon.options;
-        const iconSize = icon.iconSize || [32,32];
-        const iconAnchor = icon.iconAnchor || [16,32];
-
-        const markerPoint = map.latLngToContainerPoint(marker.getLatLng());
-        const centerOffsetX = iconSize[0]/2 - iconAnchor[0];
-        const centerOffsetY = iconSize[1]/2 - iconAnchor[1];
-        const centerPoint = L.point(markerPoint.x + centerOffsetX, markerPoint.y + centerOffsetY);
-
-        const dx = centerPoint.x - mousePoint.x;
-        const dy = centerPoint.y - mousePoint.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if(dist <= snapRadius){
-            if(bridge && bridge.snapMouse){
-                bridge.snapMouse(centerPoint.x, centerPoint.y);
-            }
-            break;
-        }
-    }
-});
-function escapeHtml(str){
-    return String(str)
-        .replace(/&/g,"&amp;")
-        .replace(/</g,"&lt;")
-        .replace(/>/g,"&gt;")
-        .replace(/"/g,"&quot;")
-        .replace(/'/g,"&#39;");
-}
-
-function appendChatLine(text){
-    const div = document.createElement("div");
-    div.className = "chatLine";
-    div.innerHTML = escapeHtml(text);
-    const log = document.getElementById("chatLog");
-    log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
-}
-
-document.getElementById("chatSend").onclick = sendChat;
-document.getElementById("chatInput").addEventListener("keydown", e=>{
-    if(e.key==="Enter") sendChat();
-});
-
-function sendChat(){
-    const input = document.getElementById("chatInput");
-    const msg = input.value.trim();
-    if(!msg) return;
-    input.value = "";
-    if(bridge && bridge.sendChat){
-        bridge.sendChat(msg);
-    }
-}
-</script>
-</body>
-</html>
-
-'''
-
-LOGO = "\033[38;5;208m"+r'''
-                                               .--.
-                                               `.  \
-                                                 \  \
-                                                  .  \
-                                                  :   .
-                                                  |    .
-                                                  |    :
-                                                  |    |
-  ..._  ___                                       |    |
- `."".`---'""--..___                              |    |
- ,-\  \             ""-...__         _____________/    |
- / ` " '                    `"""""""""                  .
- \                                                      L
- (>                                                      \
-/                                                         \
-\_    ___..---.                                            L
-  `--'         '.                                           \
-                 .                                           \_
-                _/`.                                           `.._
-             .'     -.                                             `.
-            /     __.-Y     /''''''-...___,...--------.._            |
-           /   _."    |    /                ' .      \   '---..._    |
-          /   /      /    /                _,. '    ,/           |   |
-          \_,'     _.'   /              /''     _,-'            _|   |
-                  '     /               `-----''               /     |
-                  `...-'                                       `...
-[Maptnh@S-H4CK13]      [Blood Cat Map '''+VERSION+r''']    [https://github.com/MartinxMax]'''+"\033[0m"
-
-
-class GlobalBCHandler(SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=os.path.join('.', 'data'), **kwargs)
-
-    def do_GET(self):
-        if self.path.strip("/") != "global.bc":
-            self.send_error(403, "Forbidden")
-            return
-        return super().do_GET()
-
-def start_udp_listener(win):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(("", CHAT_SER))
-    log.info(f"BloodCat-Map chat service started...")
-    while True:
-        try:
-            data, addr = s.recvfrom(4096)
-            res = cam.aes_decrypt(data)
-            txt = json.loads(res)["msg"]
-            ts = time.strftime("%Y-%m-%d %H:%M:%S")
-            line = f"({ts}){addr[0]}: {txt}"
-            msg = json.dumps(line, ensure_ascii=False)
-            js = f'appendChatLine({msg});'
-            win.view.page().runJavaScript(js)
-        except Exception as e:
-            log.error(f"[CHAT RECV ERROR] {e}")
-        
-
-
-def start_http_server():
-    def get_local_ip():
-        import socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(('8.8.8.8', 80))   
-            ip = s.getsockname()[0]
-        except:
-            ip = '127.0.0.1'
-        finally:
-            s.close()
-        return ip
-    server_address = ("0.0.0.0", API_SER)
-    httpd = HTTPServer(server_address, GlobalBCHandler)
-    local_ip = get_local_ip() 
-    log.info(f"BloodCat-Map API local data download link: http://{local_ip}:{API_SER}/global.bc")
-    httpd.serve_forever()
-
- 
-
-class Bridge(QObject):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.parent_window = None
-    @pyqtSlot(int, int)
-    def snapMouse(self, x, y):
-        global_pos = self.parent_window.view.mapToGlobal(QPoint(x, y))
-        QCursor.setPos(global_pos)
-    @pyqtSlot(str)
-
-    def sendChat(self, msg):
-        try:
-            msg = json.dumps({"msg": msg}, ensure_ascii=False)
-            payload = cam.aes_encrypt(msg)
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            s.sendto(payload, ("255.255.255.255", 34413))
-            s.close()
-        except Exception as e:
-            log.error(f"[CHAT SEND ERROR] {e}")
-
-    @pyqtSlot(str)
-    def playRTSP(self, url):
-        match = re.search(r'@([\d\.]+):', url)
-        ip = match.group(1) if match else 'N/A'
-
-        log.info(f"Now playing... [{ip}]")
-
-        subprocess.Popen([
-            "python3.14", 
-            "./lib/play.py",
-            url,
-            ip,
-            'origin'
-        ])
-
-    @pyqtSlot(str, result=str)
-    def addRemoteUrl(self, url):
-        try:
-            url = url.strip()
-            if not url:
-                return json.dumps({"ok": False, "msg": "empty url"})
-            try:
-                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                    arr = json.load(f)
-                    if not isinstance(arr, list): arr = []
-            except Exception:
-                arr = []
-            if url in arr:
-                return json.dumps({"ok": False, "msg": "url exists"})
-            arr.append(url)
-            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(arr, f, ensure_ascii=False, indent=2)
-            if hasattr(self, 'parent_window') and self.parent_window:
-                try:
-                    self.parent_window.start_data_loader()
-                except Exception as e:
-                    print("start_data_loader failed:", e)
-            return json.dumps({"ok": True, "msg": ""})
-        except Exception as e:
-            return json.dumps({"ok": False, "msg": str(e)})
-
-    @pyqtSlot(str, result=str)
-    def removeRemoteUrl(self, url):
-        try:
-            url = url.strip()
-            try:
-                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                    arr = json.load(f)
-                    if not isinstance(arr, list): arr = []
-            except Exception:
-                arr = []
-            if url not in arr:
-                return json.dumps({"ok": False, "msg": "not found"})
-            arr = [x for x in arr if x != url]
-            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(arr, f, ensure_ascii=False, indent=2)
-            if hasattr(self, 'parent_window') and self.parent_window:
-                try:
-                    self.parent_window.start_data_loader()
-                except Exception as e:
-                    print("start_data_loader failed:", e)
-            return json.dumps({"ok": True, "msg": ""})
-        except Exception as e:
-            return json.dumps({"ok": False, "msg": str(e)})
-
-    @pyqtSlot(result=str)
-    def getRemoteUrls(self):
-        try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                arr = json.load(f)
-                if not isinstance(arr, list):
-                    arr = []
-        except Exception:
-            arr = []
-        return json.dumps(arr)
-
-    @pyqtSlot(result=str)
-    def getDbStatus(self):
-        return "N/A"
-
-
-class DataLoader(QThread):
-    remoteLoaded = pyqtSignal(dict)
-    localLoaded = pyqtSignal(dict)
-
-    def __init__(self, remote_urls=None, parent=None):
-        super().__init__(parent)
+class DataLoader(threading.Thread):
+    def __init__(self, remote_urls=None):
+        super().__init__(daemon=True)
         self.remote_urls = remote_urls or []
+        self.result = {}
 
     def parse_raw_to_dict(self, raw, source_label, source_url=None, icon_path=None):
         result = {}
@@ -573,14 +67,15 @@ class DataLoader(QThread):
                     "asn": asn,
                     "network": network,
                     "source": source_label,
-                    "icon": icon_path or "./color_1.png",
+                    "icon": icon_path or "./location/color_1.png",
                     "source_url": source_url or ""
                 }
 
         if isinstance(raw, str):
             for line in raw.splitlines():
                 line = line.strip()
-                if not line: continue
+                if not line:
+                    continue
                 try:
                     obj = json.loads(line)
                     if isinstance(obj, dict):
@@ -601,14 +96,6 @@ class DataLoader(QThread):
         else:
             if isinstance(raw, dict):
                 process_obj(raw)
-            else:
-                try:
-                    parsed = json.loads(raw)
-                    if isinstance(parsed, dict):
-                        process_obj(parsed)
-                except Exception:
-                    pass
-
         return result
 
     def run(self):
@@ -623,214 +110,597 @@ class DataLoader(QThread):
                 remote_urls = []
             for idx, url in enumerate(remote_urls):
                 try:
-                    try:
-                        remote_raw = cam.get_DB_data(url)
-                    except Exception as e:
-                        print("cam.get_DB_data(url) error:", e)
+                    remote_raw = cam.get_DB_data(url)
                     if not remote_raw:
                         continue
                     slot_index = (idx % SLOT_COUNT) + 1
-                    icon_path = f"./color_{slot_index}.png"
+                    icon_path = f"/location/color_{slot_index}.png"
                     parsed = self.parse_raw_to_dict(remote_raw, 'remote', source_url=url, icon_path=icon_path)
-                    for k,v in parsed.items():
+                    for k, v in parsed.items():
                         remote_merged[k] = v
                 except Exception as e:
                     print("Error processing remote url", url, e)
                     continue
         except Exception as e:
-            print("DataLoader remote part error:", e)
-
-        self.remoteLoaded.emit(remote_merged)
-        return
+            print("DataLoader remote error:", e)
+        self.result = remote_merged
 
 
-class MapWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("BloodCat Map @ S-H4CK13    [https://github.com/MartinxMax]")
-        self.resize(1280, 800)
+_markers_data = {}
+_data_lock = threading.Lock()
 
-        icon_path = os.path.join(os.path.dirname(__file__), "ico.png")
-        if os.path.exists(icon_path):
-            self.setWindowIcon(QIcon(icon_path))
 
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.layout = QVBoxLayout(self.central_widget)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+def reload_data():
+    loader = DataLoader()
+    loader.start()
+    loader.join(timeout=30)
+    with _data_lock:
+        global _markers_data
+        _markers_data = loader.result
+    log.info(f"Data reloaded: {len(_markers_data)} markers")
 
-        self.view = QWebEngineView()
-        self.layout.addWidget(self.view)
 
-        self.wait_label = QLabel(self)
-        self.wait_label.setAlignment(Qt.AlignCenter)
-        self.wait_label.setStyleSheet("background-color: rgba(0,0,0,1);")
-        self.wait_label.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.wait_label.setAttribute(Qt.WA_NoSystemBackground)
-        self.wait_label.setCursor(Qt.BlankCursor)
-        wait_path = os.path.join(os.path.dirname(__file__),"location", "wait.jpg")
-        self.wait_pixmap = None
-        if os.path.exists(wait_path):
-            self.wait_pixmap = QPixmap(wait_path)
-            self._update_wait_pixmap()
-        else:
-            print(f"\033[31m[!] No found background: {wait_path}\033[0m")
+class GlobalBCHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=os.path.join('.', 'data'), **kwargs)
 
-        self.wait_label.raise_()
-        self.wait_label.show()
-        self.html_path = os.path.join(os.path.dirname(__file__),"location","map_temp.html")
-        with open(self.html_path, "w", encoding="utf-8") as f:
-            f.write(HTML)
-        self.channel = QWebChannel()
-        self.bridge = Bridge()
-        self.bridge.parent_window = self
-        self.channel.registerObject('bridge', self.bridge)
-        self.view.page().setWebChannel(self.channel)
-
-        self.last_data = {}
-        self.remote_data = {}
-        self.local_data = {}
-        self.merged_data = {}
-
-        self.view.loadFinished.connect(self.on_load_finished)
-        self.view.load(QUrl.fromLocalFile(os.path.abspath(self.html_path)))
-
-    def _update_wait_pixmap(self):
-        if not self.wait_pixmap:
-            self.wait_label.setFixedSize(self.size())
+    def do_GET(self):
+        if self.path.strip("/") != "global.bc":
+            self.send_error(403, "Forbidden")
             return
-        scaled = self.wait_pixmap.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-        self.wait_label.setPixmap(scaled)
-        self.wait_label.setGeometry(self.rect())
+        return super().do_GET()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._update_wait_pixmap()
+    def log_message(self, format, *args):
+        pass
 
-    def _stop_current_animation(self):
-        try:
-            if hasattr(self, 'anim_group') and self.anim_group:
-                self.anim_group.stop()
-        except Exception:
-            pass
 
-    def _setup_wait_animation(self, loop=True, loop_count=-1):
-        self._stop_current_animation()
+def start_bc_server():
+    server_address = ("0.0.0.0", API_SER)
+    httpd = HTTPServer(server_address, GlobalBCHandler)
+    log.info(f"BloodCat-Map local BC server running on port {API_SER}")
+    httpd.serve_forever()
 
-        self._opacity_effect = QGraphicsOpacityEffect(self.wait_label)
-        self.wait_label.setGraphicsEffect(self._opacity_effect)
-        self._opacity_effect.setOpacity(1.0)
 
-        anim1 = QPropertyAnimation(self._opacity_effect, b"opacity")
-        anim1.setDuration(1500)
-        anim1.setStartValue(1.0)
-        anim1.setEndValue(0.2)
-        anim1.setEasingCurve(QEasingCurve.InOutSine)
+HTML = r'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>BloodCat Map @ S-H4CK13</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-family: "Segoe UI", Arial, sans-serif; }
 
-        anim2 = QPropertyAnimation(self._opacity_effect, b"opacity")
-        anim2.setDuration(1500)
-        anim2.setStartValue(0.2)
-        anim2.setEndValue(1.0)
-        anim2.setEasingCurve(QEasingCurve.InOutSine)
+.cursor-map { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[ ]</text></svg>') 12 12, auto !important; }
+.leaflet-marker-icon { cursor: pointer !important; }
 
-        anim3 = QPropertyAnimation(self._opacity_effect, b"opacity")
-        anim3.setDuration(1000)
-        anim3.setStartValue(1.0)
-        anim3.setEndValue(0.0)
-        anim3.setEasingCurve(QEasingCurve.InOutQuad)
-        anim3.finished.connect(lambda: [
-            self.wait_label.hide(),
-            self.view.raise_()
-        ])
+.ip-tooltip { background: rgba(0,0,0,0.78); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 6px; pointer-events: none; }
 
-        if not self.wait_label.isVisible():
-            self.wait_label.show()
+#searchBox {
+    position: absolute; top: 10px; right: 10px; z-index: 9999;
+    background: rgba(0,0,0,0.82); color: #fff; padding: 8px;
+    border-radius: 8px; width: 230px;
+    border: 1px solid rgba(0,255,0,0.15);
+}
+#searchInput { width: 100%; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #0f0; }
+#searchResults { max-height: 150px; overflow-y: auto; margin-top: 4px; font-size: 12px; }
+.searchItem { padding: 4px 6px; cursor: pointer; border-radius: 3px; }
+.searchItem:hover { background: rgba(0,255,0,0.15); }
 
-        if loop:
-            loop_group = QSequentialAnimationGroup()
-            loop_group.addAnimation(anim1)
-            loop_group.addAnimation(anim2)
-            loop_group.setLoopCount(loop_count)
-            loop_group.finished.connect(lambda: anim3.start())
-            loop_group.start()
-            self.anim_group = loop_group
-        else:
-            seq = QSequentialAnimationGroup()
-            seq.addAnimation(anim1)
-            seq.addAnimation(anim2)
-            seq.addAnimation(anim3)
-            seq.start()
-            self.anim_group = seq
+#statusBox {
+    position: absolute; left: 10px; bottom: 10px; z-index: 9999;
+    background: rgba(0,0,0,0.82); color: #fff; padding: 8px;
+    border-radius: 8px; width: 320px;
+    border: 1px solid rgba(0,255,0,0.15);
+    display: flex; flex-direction: column;
+}
+#statusHeader { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+.statusDot { width: 10px; height: 10px; border-radius: 50%; background: #888; display: inline-block; }
+#urlRow { display: flex; gap: 6px; margin-bottom: 6px; }
+#urlInput { flex: 1; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #0f0; font-size: 12px; }
+#urlBtn { padding: 5px 10px; border-radius: 4px; border: none; background: #090; color: #0f0; cursor: pointer; font-weight: bold; }
+#urlBtn:hover { background: #0b0; }
+#statusList { max-height: 160px; overflow-y: auto; font-size: 12px; }
+#statusList::-webkit-scrollbar { width: 5px; }
+#statusList::-webkit-scrollbar-thumb { background: rgba(0,255,0,0.4); border-radius: 3px; }
+.statusItem { display: flex; align-items: center; gap: 6px; padding: 5px; cursor: pointer; border-radius: 4px; }
+.statusItem:hover { background: rgba(0,255,0,0.06); }
+.statusThumb { width: 36px; height: 22px; object-fit: cover; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); background: #111; }
+.statusText { color: #0f0; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statusSub { color: #999; font-size: 10px; }
+.delBtn { background: transparent; border: 1px solid rgba(255,80,80,0.3); color: #f77; padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+.delBtn:hover { background: rgba(255,80,80,0.15); }
 
-    def on_load_finished(self, ok):
-        if not ok:
-            print("\033[31m[!] BloodCat config file load failed... please check your network...\033[0m")
-            return
-        self.start_data_loader()
+#markerCount {
+    position: absolute; top: 10px; left: 10px; z-index: 9999;
+    background: rgba(0,0,0,0.75); color: #0f0; padding: 5px 10px;
+    border-radius: 6px; font-size: 12px; border: 1px solid rgba(0,255,0,0.15);
+}
 
-    def start_data_loader(self):
-        try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                remote_urls = json.load(f)
-                if not isinstance(remote_urls, list):
-                    remote_urls = []
-        except Exception:
-            remote_urls = []
-        self.loader = DataLoader(remote_urls=remote_urls)
-        self.loader.remoteLoaded.connect(self._handle_remote_loaded)
-        self.loader.localLoaded.connect(self._handle_local_loaded)
-        self.loader.start()
+/* CCTV Popup Modal */
+#cctvModal {
+    display: none;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 99999;
+    background: rgba(0,0,0,0.7);
+    align-items: center; justify-content: center;
+}
+#cctvModal.open { display: flex; }
+#cctvModalBox {
+    background: #0d0d0d;
+    border: 1px solid rgba(0,255,0,0.3);
+    border-radius: 10px;
+    width: 480px; max-width: 95vw;
+    box-shadow: 0 0 40px rgba(0,255,0,0.1);
+    overflow: hidden;
+}
+#cctvModalHeader {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    background: rgba(0,255,0,0.07);
+    border-bottom: 1px solid rgba(0,255,0,0.15);
+}
+#cctvModalTitle { color: #0f0; font-size: 14px; font-weight: bold; }
+#cctvModalClose {
+    background: transparent; border: none; color: #f77;
+    font-size: 18px; cursor: pointer; line-height: 1; padding: 0 4px;
+}
+#cctvModalClose:hover { color: #f00; }
+#cctvPreviewArea {
+    background: #000; width: 100%; height: 220px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+}
+#cctvPreviewImg {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    display: none;
+}
+#cctvPreviewMsg {
+    color: #555; font-size: 13px; text-align: center; padding: 10px;
+    line-height: 1.6;
+}
+#cctvPreviewLoader {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #0f0; font-size: 12px; display: none;
+}
+#cctvInfoTable {
+    padding: 12px 14px;
+    font-size: 12px; color: #ccc;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+#cctvInfoTable table { width: 100%; border-collapse: collapse; }
+#cctvInfoTable td { padding: 3px 6px; }
+#cctvInfoTable td:first-child { color: #0f0; width: 80px; }
+#cctvRtspRow {
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 8px;
+}
+#cctvRtspUrl {
+    flex: 1; background: #1a1a1a; border: 1px solid rgba(0,255,0,0.15);
+    color: #aaa; padding: 5px 8px; border-radius: 4px; font-size: 11px;
+    word-break: break-all; overflow-x: auto; white-space: nowrap;
+    font-family: monospace;
+}
+#cctvCopyBtn {
+    padding: 5px 10px; border-radius: 4px; border: none;
+    background: #090; color: #0f0; cursor: pointer; font-size: 11px; white-space: nowrap;
+}
+#cctvCopyBtn:hover { background: #0b0; }
+#cctvRetryBtn {
+    margin: 0 14px 12px; padding: 6px; border-radius: 4px; border: none;
+    background: rgba(0,255,0,0.08); color: #0f0; cursor: pointer;
+    font-size: 12px; width: calc(100% - 28px);
+    border: 1px solid rgba(0,255,0,0.15);
+}
+#cctvRetryBtn:hover { background: rgba(0,255,0,0.15); }
 
-    def _run_update_js(self, data_dict):
-        try:
-            js = "updateMarkers(%s);" % json.dumps(data_dict, ensure_ascii=False)
-            self.view.page().runJavaScript(js)
-        except Exception as e:
-            print("\033[31m[!] runJavaScript failed:", e, "\033[0m")
+@media (max-width: 480px) {
+    #statusBox { width: 260px; }
+    #searchBox { width: 180px; }
+    #cctvModalBox { width: 98vw; }
+}
+</style>
+</head>
+<body>
 
-    def _handle_remote_loaded(self, remote_dict):
-        log.info("Remote loaded: %d items" % len(remote_dict))
-        self.remote_data = remote_dict or {}
-        self.merged_data = dict(self.remote_data)
-        self._run_update_js(self.merged_data)
-        self._setup_wait_animation(loop=True, loop_count=1)
+<div id="map" class="cursor-map"></div>
+<div id="markerCount">Cameras: <span id="camCount">0</span></div>
 
-    def _handle_local_loaded(self, local_dict):
-        log.info("Local loaded: %d items" % len(local_dict))
-        self.local_data = local_dict or {}
-        merged = dict(self.remote_data)
-        for ip, local_item in (self.local_data.items() if self.local_data else {}):
-            if ip in merged:
-                remote_item = merged[ip]
-                lalo_to_use = remote_item.get("lalo", "")
- 
-                icon_to_use = remote_item.get("icon", "./color_1.png")
-                merged[ip] = {
-                    "rtsp": local_item.get("rtsp", remote_item.get("rtsp", "")),
-                    "lalo": lalo_to_use,
-                    "sys_org": local_item.get("sys_org", remote_item.get("sys_org", "")),
-                    "asn": local_item.get("asn", remote_item.get("asn", "")),
-                    "network": local_item.get("network", remote_item.get("network", "")),
-                    "source": "local",
-                    "icon": icon_to_use,
-                    "source_url": remote_item.get("source_url", "")
-                }
-            else:
-                merged[ip] = local_item
-        self.merged_data = merged
-        self._run_update_js(self.merged_data)
-    
+<div id="searchBox">
+    <input type="text" id="searchInput" placeholder="Search IP / ASN / Network / Org"/>
+    <div id="searchResults"></div>
+</div>
+
+<div id="statusBox">
+    <div id="statusHeader">
+        <span class="statusDot" id="dbDot"></span>
+        <strong>Remote Databases</strong>
+        <span style="margin-left:auto;font-size:11px;color:#555" id="lastRefresh"></span>
+    </div>
+    <div id="urlRow">
+        <input id="urlInput" placeholder="Enter remote DB URL (http://...)"/>
+        <button id="urlBtn">Get</button>
+    </div>
+    <div id="statusList"></div>
+</div>
+
+<!-- CCTV Popup Modal -->
+<div id="cctvModal">
+    <div id="cctvModalBox">
+        <div id="cctvModalHeader">
+            <span id="cctvModalTitle">CCTV Camera</span>
+            <button id="cctvModalClose" title="Close">&times;</button>
+        </div>
+        <div id="cctvPreviewArea">
+            <div id="cctvPreviewLoader">Loading snapshot...</div>
+            <img id="cctvPreviewImg" alt="CCTV snapshot" crossorigin="anonymous"/>
+            <div id="cctvPreviewMsg">
+                <div style="font-size:28px;margin-bottom:8px">&#128247;</div>
+                Click "Load Snapshot" to attempt a live preview
+            </div>
+        </div>
+        <div id="cctvInfoTable">
+            <table>
+                <tr><td>IP</td><td id="info_ip">-</td></tr>
+                <tr><td>Org</td><td id="info_org">-</td></tr>
+                <tr><td>ASN</td><td id="info_asn">-</td></tr>
+                <tr><td>Network</td><td id="info_net">-</td></tr>
+                <tr><td>Source</td><td id="info_src">-</td></tr>
+            </table>
+        </div>
+        <div id="cctvRtspRow">
+            <div id="cctvRtspUrl">-</div>
+            <button id="cctvCopyBtn">Copy URL</button>
+        </div>
+        <button id="cctvRetryBtn">&#128247; Load Snapshot</button>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([20, 0], 2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
+}).addTo(map);
+
+let markers = {}, dataStore = {};
+const iconCache = {};
+
+function makeIcon(path) {
+    if (!path) return makeDefaultIcon();
+    if (iconCache[path]) return iconCache[path];
+    try {
+        const ic = L.icon({ iconUrl: path, iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -30] });
+        iconCache[path] = ic;
+        return ic;
+    } catch(e) { return makeDefaultIcon(); }
+}
+function makeDefaultIcon() {
+    if (iconCache['__default']) return iconCache['__default'];
+    const ic = L.divIcon({
+        html: '<div style="width:18px;height:18px;background:#0f0;border-radius:50%;border:2px solid #090;box-shadow:0 0 8px #0f0;"></div>',
+        className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+    });
+    iconCache['__default'] = ic;
+    return ic;
+}
+
+// ---- CCTV Modal ----
+let currentCamIp = null;
+
+function openCctvModal(ip, item) {
+    currentCamIp = ip;
+    document.getElementById('cctvModalTitle').textContent = 'CCTV — ' + ip;
+    document.getElementById('info_ip').textContent = ip;
+    document.getElementById('info_org').textContent = item.sys_org || '-';
+    document.getElementById('info_asn').textContent = item.asn || '-';
+    document.getElementById('info_net').textContent = item.network || '-';
+    document.getElementById('info_src').textContent = item.source_url ? item.source_url.slice(0, 40) + (item.source_url.length > 40 ? '...' : '') : (item.source || '-');
+    document.getElementById('cctvRtspUrl').textContent = item.rtsp || '-';
+    resetPreview();
+    document.getElementById('cctvModal').classList.add('open');
+}
+
+function resetPreview() {
+    document.getElementById('cctvPreviewImg').style.display = 'none';
+    document.getElementById('cctvPreviewImg').src = '';
+    document.getElementById('cctvPreviewLoader').style.display = 'none';
+    document.getElementById('cctvPreviewMsg').style.display = 'flex';
+    document.getElementById('cctvPreviewMsg').style.flexDirection = 'column';
+    document.getElementById('cctvPreviewMsg').style.alignItems = 'center';
+    document.getElementById('cctvPreviewMsg').innerHTML = '<div style="font-size:28px;margin-bottom:8px">&#128247;</div>Click "Load Snapshot" to attempt a live preview';
+}
+
+function loadSnapshot() {
+    if (!currentCamIp) return;
+    document.getElementById('cctvPreviewMsg').style.display = 'none';
+    document.getElementById('cctvPreviewImg').style.display = 'none';
+    document.getElementById('cctvPreviewLoader').style.display = 'block';
+    document.getElementById('cctvPreviewLoader').textContent = 'Loading snapshot...';
+
+    const img = document.getElementById('cctvPreviewImg');
+    const ts = Date.now();
+    img.onload = () => {
+        document.getElementById('cctvPreviewLoader').style.display = 'none';
+        img.style.display = 'block';
+    };
+    img.onerror = () => {
+        document.getElementById('cctvPreviewLoader').style.display = 'none';
+        document.getElementById('cctvPreviewMsg').style.display = 'flex';
+        document.getElementById('cctvPreviewMsg').innerHTML =
+            '<div style="font-size:22px;margin-bottom:6px">&#10060;</div>' +
+            'Snapshot unavailable<br><span style="font-size:10px;color:#555">Camera may be offline or require authentication</span>';
+    };
+    img.src = `/api/snapshot/${currentCamIp}?t=${ts}`;
+}
+
+document.getElementById('cctvModalClose').onclick = () => {
+    document.getElementById('cctvModal').classList.remove('open');
+    currentCamIp = null;
+};
+document.getElementById('cctvModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('cctvModal')) {
+        document.getElementById('cctvModal').classList.remove('open');
+        currentCamIp = null;
+    }
+});
+document.getElementById('cctvRetryBtn').onclick = loadSnapshot;
+document.getElementById('cctvCopyBtn').onclick = () => {
+    const url = document.getElementById('cctvRtspUrl').textContent;
+    if (url && url !== '-') {
+        navigator.clipboard.writeText(url).then(() => {
+            document.getElementById('cctvCopyBtn').textContent = 'Copied!';
+            setTimeout(() => document.getElementById('cctvCopyBtn').textContent = 'Copy URL', 1500);
+        });
+    }
+};
+
+// ---- Markers ----
+function updateMarkers(data_obj) {
+    dataStore = data_obj || {};
+    const ips = new Set(Object.keys(dataStore));
+    for (let ip in markers) {
+        if (!ips.has(ip)) { map.removeLayer(markers[ip]); delete markers[ip]; }
+    }
+    for (let ip in dataStore) {
+        const item = dataStore[ip];
+        const parts = ('' + item.lalo).split(',').map(x => parseFloat(x));
+        if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) continue;
+        const coords = [parts[0], parts[1]];
+        const icon = makeIcon(item.icon);
+        if (markers[ip]) {
+            markers[ip].setLatLng(coords);
+            try { markers[ip].setIcon(icon); } catch(e) {}
+        } else {
+            const m = L.marker(coords, { icon }).addTo(map);
+            markers[ip] = m;
+            const tooltip = `${ip}<br>${item.sys_org || ''}<br>ASN: ${item.asn || ''}<br>${item.network || ''}`;
+            m.bindTooltip(tooltip, { permanent: false, direction: 'top', offset: [0, -10], className: 'ip-tooltip' });
+            m.on('click', () => openCctvModal(ip, item));
+        }
+    }
+    document.getElementById('camCount').textContent = Object.keys(markers).length;
+}
+
+// ---- Search ----
+document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    const div = document.getElementById('searchResults');
+    div.innerHTML = '';
+    if (!q) return;
+    for (let ip in dataStore) {
+        const item = dataStore[ip];
+        const text = `${ip} ${item.asn||''} ${item.network||''} ${item.sys_org||''}`.toLowerCase();
+        if (text.includes(q)) {
+            const el = document.createElement('div');
+            el.className = 'searchItem';
+            el.textContent = ip + (item.sys_org ? ' — ' + item.sys_org : '');
+            el.onclick = () => {
+                const p = ('' + item.lalo).split(',').map(x => parseFloat(x));
+                if (p.length >= 2) map.setView([p[0], p[1]], 10);
+                if (markers[ip]) openCctvModal(ip, item);
+                div.innerHTML = '';
+                document.getElementById('searchInput').value = '';
+            };
+            div.appendChild(el);
+        }
+    }
+});
+
+// ---- Status list ----
+function renderStatusList() {
+    fetch('/api/config').then(r => r.json()).then(urls => {
+        const list = document.getElementById('statusList');
+        list.innerHTML = '';
+        const clean = [...new Set((urls || []).filter(Boolean).map(u => String(u).trim()).filter(Boolean))].slice(0, SLOT_COUNT);
+        const SLOT_COUNT_VAL = 10;
+        for (let i = 0; i < SLOT_COUNT_VAL; i++) {
+            const url = clean[i] || null;
+            const display = url ? (url.length > 34 ? url.slice(0, 32) + '..' : url) : 'Empty';
+            const div = document.createElement('div');
+            div.className = 'statusItem';
+            div.innerHTML = `
+                <img src="/location/color_${i+1}.png" class="statusThumb" alt=""/>
+                <div class="statusText" title="${url||''}">${display}</div>
+                ${url ? `<button class="delBtn" data-url="${encodeURIComponent(url)}" title="Remove">x</button>` : ''}
+            `;
+            if (url) {
+                div.onclick = (ev) => {
+                    if (ev.target.classList.contains('delBtn')) return;
+                    for (let ip in dataStore) {
+                        if (dataStore[ip].source_url === url) {
+                            const p = (''+dataStore[ip].lalo).split(',').map(x=>parseFloat(x));
+                            if (p.length>=2) map.setView([p[0],p[1]],10);
+                            break;
+                        }
+                    }
+                };
+                const delBtn = div.querySelector('.delBtn');
+                if (delBtn) delBtn.onclick = (ev) => {
+                    ev.stopPropagation();
+                    const u = decodeURIComponent(ev.target.getAttribute('data-url'));
+                    fetch('/api/config', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:u}) })
+                        .then(r=>r.json()).then(()=>{ renderStatusList(); loadData(); });
+                };
+            }
+            list.appendChild(div);
+        }
+    });
+}
+
+document.getElementById('urlBtn').onclick = () => {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) return;
+    fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url}) })
+        .then(r=>r.json()).then(res => {
+            if (res.ok) {
+                document.getElementById('urlInput').value = '';
+                renderStatusList();
+                loadData();
+            } else {
+                alert(res.msg || 'Failed to add URL');
+            }
+        });
+};
+
+// ---- Data loading ----
+function loadData() {
+    document.getElementById('dbDot').style.background = '#fa0';
+    fetch('/api/data').then(r => r.json()).then(data => {
+        updateMarkers(data);
+        document.getElementById('dbDot').style.background = '#0f0';
+        const now = new Date();
+        document.getElementById('lastRefresh').textContent = now.toLocaleTimeString();
+    }).catch(() => {
+        document.getElementById('dbDot').style.background = '#f00';
+    });
+}
+
+loadData();
+renderStatusList();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
+'''
+
+
+@app.route('/')
+def index():
+    return HTML
+
+
+@app.route('/api/data')
+def api_data():
+    reload_data()
+    with _data_lock:
+        return jsonify(_markers_data)
+
+
+@app.route('/api/config', methods=['GET'])
+def api_config_get():
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            arr = json.load(f)
+            if not isinstance(arr, list):
+                arr = []
+    except Exception:
+        arr = []
+    return jsonify(arr)
+
+
+@app.route('/api/config', methods=['POST'])
+def api_config_add():
+    body = request.get_json(force=True, silent=True) or {}
+    url = (body.get('url') or '').strip()
+    if not url:
+        return jsonify({"ok": False, "msg": "empty url"})
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            arr = json.load(f)
+            if not isinstance(arr, list):
+                arr = []
+    except Exception:
+        arr = []
+    if url in arr:
+        return jsonify({"ok": False, "msg": "url already exists"})
+    arr.append(url)
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        json.dump(arr, f, ensure_ascii=False, indent=2)
+    return jsonify({"ok": True, "msg": ""})
+
+
+@app.route('/api/config', methods=['DELETE'])
+def api_config_remove():
+    body = request.get_json(force=True, silent=True) or {}
+    url = (body.get('url') or '').strip()
+    if not url:
+        return jsonify({"ok": False, "msg": "empty url"})
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            arr = json.load(f)
+            if not isinstance(arr, list):
+                arr = []
+    except Exception:
+        arr = []
+    if url not in arr:
+        return jsonify({"ok": False, "msg": "not found"})
+    arr = [x for x in arr if x != url]
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        json.dump(arr, f, ensure_ascii=False, indent=2)
+    return jsonify({"ok": True, "msg": ""})
+
+
+SNAPSHOT_PATHS = [
+    "/ISAPI/Streaming/channels/101/picture",
+    "/onvif/snapshot/1",
+    "/snapshot.cgi",
+    "/cgi-bin/snapshot.cgi",
+    "/image/jpeg.cgi",
+    "/cgi-bin/viewer/video.jpg",
+    "/axis-cgi/jpg/image.cgi",
+    "/jpg/image.jpg",
+    "/video.cgi?sessionid=0",
+    "/snap.jpg",
+    "/snapshot",
+    "/shot.jpg",
+]
+
+
+@app.route('/api/snapshot/<ip>')
+def api_snapshot(ip):
+    if not re.match(r'^[\d\.]+$', ip):
+        return Response("Invalid IP", status=400)
+
+    ports = [80, 8080, 8000, 443]
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "image/jpeg,image/*,*/*"
+    }
+
+    for port in ports:
+        for path in SNAPSHOT_PATHS:
+            schemes = ["http"]
+            if port == 443:
+                schemes = ["https"]
+            for scheme in schemes:
+                url = f"{scheme}://{ip}:{port}{path}"
+                try:
+                    resp = requests.get(url, timeout=3, verify=False, headers=headers, stream=True)
+                    ct = resp.headers.get("Content-Type", "")
+                    if resp.status_code == 200 and ("image" in ct or "jpeg" in ct or "jpg" in ct):
+                        data = resp.content
+                        if len(data) > 500:
+                            return Response(data, content_type=ct or "image/jpeg")
+                except Exception:
+                    pass
+
+    return Response("No snapshot available", status=404)
+
+
 if __name__ == "__main__":
     print(LOGO)
-    threading.Thread(target=start_http_server, daemon=True).start()
-    app = QApplication(sys.argv)
-    win = MapWindow()
-    threading.Thread(
-    target=start_udp_listener,
-    args=(win,),
-    daemon=True
-        ).start()
-
-    win.showMaximized()
-    sys.exit(app.exec_())
+    threading.Thread(target=start_bc_server, daemon=True).start()
+    log.info(f"BloodCat Map web server starting on http://0.0.0.0:{WEB_PORT}")
+    app.run(host='0.0.0.0', port=WEB_PORT, debug=False, threaded=True)
