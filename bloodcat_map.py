@@ -198,7 +198,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 /* ---- Hack Box ---- */
 #hackBox {
-    position: absolute; left: 10px; bottom: 10px; z-index: 9999;
+    position: absolute; left: 10px; bottom: 80px; z-index: 9999;
     background: rgba(0,0,0,0.82); color: #fff; padding: 10px;
     border-radius: 8px; width: 310px;
     border: 1px solid rgba(255,30,30,0.35);
@@ -209,7 +209,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     display: flex; align-items: center; gap: 6px; letter-spacing: .5px;
 }
 #hackTitle::before {
-    content: "⚡"; font-size: 13px;
+    content: "👁️‍🗨️"; font-size: 13px;
 }
 #hackInputRow { display: flex; gap: 6px; }
 #hackIpInput {
@@ -382,7 +382,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 </div>
 
 <div id="hackBox">
-    <div id="hackTitle">HACK THE CAMERA</div>
+    <div id="hackTitle">BlackEYE Camera Hack</div>
     <div id="hackInputRow">
         <input id="hackIpInput" placeholder="ip:port  e.g. 188.134.80.244:554"/>
         <button id="hackBtn">Hack</button>
