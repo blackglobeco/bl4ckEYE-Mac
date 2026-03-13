@@ -6,7 +6,9 @@ import json
 import re
 import time
 import threading
+import base64
 import requests
+import cv2
 
 from flask import Flask, request, jsonify, Response, send_from_directory
 from lib.camlib import CamLib
@@ -67,7 +69,7 @@ class DataLoader(threading.Thread):
                     "asn": asn,
                     "network": network,
                     "source": source_label,
-                    "icon": icon_path or "./location/color_1.png",
+                    "icon": icon_path or "/location/color_1.png",
                     "source_url": source_url or ""
                 }
 
@@ -173,7 +175,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 .cursor-map { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="24"><text x="0" y="18" font-size="18" fill="lime" font-weight="bold">[ ]</text></svg>') 12 12, auto !important; }
 .leaflet-marker-icon { cursor: pointer !important; }
-
 .ip-tooltip { background: rgba(0,0,0,0.78); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 6px; pointer-events: none; }
 
 #searchBox {
@@ -207,7 +208,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 .statusItem:hover { background: rgba(0,255,0,0.06); }
 .statusThumb { width: 36px; height: 22px; object-fit: cover; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); background: #111; }
 .statusText { color: #0f0; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.statusSub { color: #999; font-size: 10px; }
 .delBtn { background: transparent; border: 1px solid rgba(255,80,80,0.3); color: #f77; padding: 1px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
 .delBtn:hover { background: rgba(255,80,80,0.15); }
 
@@ -217,87 +217,145 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     border-radius: 6px; font-size: 12px; border: 1px solid rgba(0,255,0,0.15);
 }
 
-/* CCTV Popup Modal */
+/* ---- CCTV Modal ---- */
 #cctvModal {
-    display: none;
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    z-index: 99999;
-    background: rgba(0,0,0,0.7);
+    display: none; position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%; z-index: 99999;
+    background: rgba(0,0,0,0.75);
     align-items: center; justify-content: center;
 }
 #cctvModal.open { display: flex; }
+
 #cctvModalBox {
     background: #0d0d0d;
     border: 1px solid rgba(0,255,0,0.3);
     border-radius: 10px;
-    width: 480px; max-width: 95vw;
-    box-shadow: 0 0 40px rgba(0,255,0,0.1);
+    width: 520px; max-width: 96vw;
+    box-shadow: 0 0 50px rgba(0,255,0,0.12);
     overflow: hidden;
+    display: flex; flex-direction: column;
 }
+
 #cctvModalHeader {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; gap: 8px;
     padding: 10px 14px;
     background: rgba(0,255,0,0.07);
     border-bottom: 1px solid rgba(0,255,0,0.15);
+    flex-shrink: 0;
 }
-#cctvModalTitle { color: #0f0; font-size: 14px; font-weight: bold; }
+#cctvModalTitle { color: #0f0; font-size: 14px; font-weight: bold; flex: 1; }
+#liveBadge {
+    display: none; align-items: center; gap: 4px;
+    font-size: 10px; color: #0f0; background: rgba(0,255,0,0.12);
+    border: 1px solid rgba(0,255,0,0.3); border-radius: 10px;
+    padding: 2px 8px;
+}
+#liveDot {
+    width: 7px; height: 7px; border-radius: 50%; background: #0f0;
+    animation: blink 1s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
 #cctvModalClose {
     background: transparent; border: none; color: #f77;
-    font-size: 18px; cursor: pointer; line-height: 1; padding: 0 4px;
+    font-size: 20px; cursor: pointer; line-height: 1; padding: 0 2px;
 }
 #cctvModalClose:hover { color: #f00; }
-#cctvPreviewArea {
-    background: #000; width: 100%; height: 220px;
-    display: flex; align-items: center; justify-content: center;
-    position: relative; overflow: hidden;
+
+/* Tab bar */
+#tabBar {
+    display: flex; border-bottom: 1px solid rgba(0,255,0,0.1);
+    flex-shrink: 0;
 }
-#cctvPreviewImg {
+.tab {
+    flex: 1; padding: 8px; text-align: center; font-size: 12px;
+    color: #555; cursor: pointer; border: none;
+    background: transparent; transition: all .15s;
+}
+.tab:hover { color: #0f0; background: rgba(0,255,0,0.04); }
+.tab.active { color: #0f0; border-bottom: 2px solid #0f0; background: rgba(0,255,0,0.06); }
+
+/* Preview area */
+#cctvPreviewArea {
+    background: #000; width: 100%; height: 270px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; flex-shrink: 0;
+}
+#cctvStreamImg {
+    width: 100%; height: 100%; object-fit: contain;
+    display: none;
+}
+#cctvSnapshotImg {
     max-width: 100%; max-height: 100%; object-fit: contain;
     display: none;
 }
-#cctvPreviewMsg {
-    color: #555; font-size: 13px; text-align: center; padding: 10px;
-    line-height: 1.6;
+#previewMsg {
+    color: #444; font-size: 13px; text-align: center;
+    padding: 16px; line-height: 1.7; display: flex;
+    flex-direction: column; align-items: center; gap: 6px;
 }
-#cctvPreviewLoader {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    color: #0f0; font-size: 12px; display: none;
+#previewMsg .icon { font-size: 30px; }
+
+#previewSpinner {
+    display: none; flex-direction: column; align-items: center; gap: 10px;
+    color: #0f0; font-size: 12px;
 }
+.spinner-ring {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(0,255,0,0.15);
+    border-top-color: #0f0;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Action buttons */
+#previewActions {
+    display: flex; gap: 8px; padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
+}
+.actionBtn {
+    flex: 1; padding: 7px; border-radius: 5px; border: none;
+    font-size: 12px; cursor: pointer; font-weight: bold; transition: all .15s;
+}
+#btnLive { background: rgba(0,255,0,0.1); color: #0f0; border: 1px solid rgba(0,255,0,0.25); }
+#btnLive:hover { background: rgba(0,255,0,0.2); }
+#btnLive.streaming { background: rgba(255,60,60,0.1); color: #f77; border-color: rgba(255,60,60,0.3); }
+#btnSnap { background: rgba(255,255,255,0.05); color: #aaa; border: 1px solid rgba(255,255,255,0.1); }
+#btnSnap:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* Info table */
 #cctvInfoTable {
-    padding: 12px 14px;
-    font-size: 12px; color: #ccc;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 10px 14px; font-size: 12px; color: #ccc;
+    border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0;
 }
 #cctvInfoTable table { width: 100%; border-collapse: collapse; }
 #cctvInfoTable td { padding: 3px 6px; }
-#cctvInfoTable td:first-child { color: #0f0; width: 80px; }
+#cctvInfoTable td:first-child { color: #0a0; width: 76px; }
+
+/* RTSP row */
 #cctvRtspRow {
-    padding: 10px 14px;
-    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
 }
 #cctvRtspUrl {
-    flex: 1; background: #1a1a1a; border: 1px solid rgba(0,255,0,0.15);
-    color: #aaa; padding: 5px 8px; border-radius: 4px; font-size: 11px;
-    word-break: break-all; overflow-x: auto; white-space: nowrap;
+    flex: 1; background: #111; border: 1px solid rgba(0,255,0,0.12);
+    color: #777; padding: 5px 8px; border-radius: 4px; font-size: 10px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-family: monospace;
 }
 #cctvCopyBtn {
     padding: 5px 10px; border-radius: 4px; border: none;
-    background: #090; color: #0f0; cursor: pointer; font-size: 11px; white-space: nowrap;
+    background: rgba(0,255,0,0.1); color: #0f0; cursor: pointer;
+    font-size: 11px; white-space: nowrap; border: 1px solid rgba(0,255,0,0.2);
 }
-#cctvCopyBtn:hover { background: #0b0; }
-#cctvRetryBtn {
-    margin: 0 14px 12px; padding: 6px; border-radius: 4px; border: none;
-    background: rgba(0,255,0,0.08); color: #0f0; cursor: pointer;
-    font-size: 12px; width: calc(100% - 28px);
-    border: 1px solid rgba(0,255,0,0.15);
-}
-#cctvRetryBtn:hover { background: rgba(0,255,0,0.15); }
+#cctvCopyBtn:hover { background: rgba(0,255,0,0.2); }
 
 @media (max-width: 480px) {
-    #statusBox { width: 260px; }
-    #searchBox { width: 180px; }
-    #cctvModalBox { width: 98vw; }
+    #statusBox { width: 250px; }
+    #searchBox { width: 175px; }
+    #cctvModalBox { width: 99vw; }
+    #cctvPreviewArea { height: 200px; }
 }
 </style>
 </head>
@@ -324,21 +382,34 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     <div id="statusList"></div>
 </div>
 
-<!-- CCTV Popup Modal -->
+<!-- CCTV Modal -->
 <div id="cctvModal">
     <div id="cctvModalBox">
+
         <div id="cctvModalHeader">
             <span id="cctvModalTitle">CCTV Camera</span>
+            <span id="liveBadge"><span id="liveDot"></span>LIVE</span>
             <button id="cctvModalClose" title="Close">&times;</button>
         </div>
+
+        <div id="previewActions">
+            <button class="actionBtn" id="btnLive">&#9654; Live Stream</button>
+            <button class="actionBtn" id="btnSnap">&#128247; Snapshot</button>
+        </div>
+
         <div id="cctvPreviewArea">
-            <div id="cctvPreviewLoader">Loading snapshot...</div>
-            <img id="cctvPreviewImg" alt="CCTV snapshot" crossorigin="anonymous"/>
-            <div id="cctvPreviewMsg">
-                <div style="font-size:28px;margin-bottom:8px">&#128247;</div>
-                Click "Load Snapshot" to attempt a live preview
+            <img id="cctvStreamImg" alt="Live stream"/>
+            <img id="cctvSnapshotImg" alt="Snapshot"/>
+            <div id="previewSpinner">
+                <div class="spinner-ring"></div>
+                <span id="spinnerMsg">Connecting...</span>
+            </div>
+            <div id="previewMsg">
+                <span class="icon">&#128247;</span>
+                <span>Click <b style="color:#0f0">Live Stream</b> to watch the camera<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>
             </div>
         </div>
+
         <div id="cctvInfoTable">
             <table>
                 <tr><td>IP</td><td id="info_ip">-</td></tr>
@@ -348,11 +419,12 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
                 <tr><td>Source</td><td id="info_src">-</td></tr>
             </table>
         </div>
+
         <div id="cctvRtspRow">
             <div id="cctvRtspUrl">-</div>
             <button id="cctvCopyBtn">Copy URL</button>
         </div>
-        <button id="cctvRetryBtn">&#128247; Load Snapshot</button>
+
     </div>
 </div>
 
@@ -371,81 +443,161 @@ function makeIcon(path) {
     if (!path) return makeDefaultIcon();
     if (iconCache[path]) return iconCache[path];
     try {
-        const ic = L.icon({ iconUrl: path, iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -30] });
-        iconCache[path] = ic;
-        return ic;
+        const ic = L.icon({ iconUrl: path, iconSize: [28,28], iconAnchor:[14,28], popupAnchor:[0,-30] });
+        iconCache[path] = ic; return ic;
     } catch(e) { return makeDefaultIcon(); }
 }
 function makeDefaultIcon() {
-    if (iconCache['__default']) return iconCache['__default'];
+    if (iconCache['__d']) return iconCache['__d'];
     const ic = L.divIcon({
-        html: '<div style="width:18px;height:18px;background:#0f0;border-radius:50%;border:2px solid #090;box-shadow:0 0 8px #0f0;"></div>',
-        className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+        html: '<div style="width:16px;height:16px;background:#0f0;border-radius:50%;border:2px solid #090;box-shadow:0 0 8px #0f0"></div>',
+        className:'', iconSize:[16,16], iconAnchor:[8,8]
     });
-    iconCache['__default'] = ic;
-    return ic;
+    iconCache['__d'] = ic; return ic;
 }
 
-// ---- CCTV Modal ----
-let currentCamIp = null;
+// ========= Modal state =========
+let currentRtsp = null;
+let streamActive = false;
 
-function openCctvModal(ip, item) {
-    currentCamIp = ip;
-    document.getElementById('cctvModalTitle').textContent = 'CCTV — ' + ip;
-    document.getElementById('info_ip').textContent = ip;
-    document.getElementById('info_org').textContent = item.sys_org || '-';
-    document.getElementById('info_asn').textContent = item.asn || '-';
-    document.getElementById('info_net').textContent = item.network || '-';
-    document.getElementById('info_src').textContent = item.source_url ? item.source_url.slice(0, 40) + (item.source_url.length > 40 ? '...' : '') : (item.source || '-');
-    document.getElementById('cctvRtspUrl').textContent = item.rtsp || '-';
-    resetPreview();
-    document.getElementById('cctvModal').classList.add('open');
+const modal       = document.getElementById('cctvModal');
+const streamImg   = document.getElementById('cctvStreamImg');
+const snapImg     = document.getElementById('cctvSnapshotImg');
+const previewMsg  = document.getElementById('previewMsg');
+const spinner     = document.getElementById('previewSpinner');
+const spinnerMsg  = document.getElementById('spinnerMsg');
+const liveBadge   = document.getElementById('liveBadge');
+const btnLive     = document.getElementById('btnLive');
+const btnSnap     = document.getElementById('btnSnap');
+
+function showSpinner(msg) {
+    streamImg.style.display = 'none';
+    snapImg.style.display   = 'none';
+    previewMsg.style.display = 'none';
+    spinner.style.display   = 'flex';
+    spinnerMsg.textContent  = msg || 'Connecting...';
+}
+function showMsg(html) {
+    streamImg.style.display = 'none';
+    snapImg.style.display   = 'none';
+    spinner.style.display   = 'none';
+    previewMsg.style.display = 'flex';
+    previewMsg.innerHTML    = html;
+}
+function showStream() {
+    snapImg.style.display   = 'none';
+    previewMsg.style.display = 'none';
+    spinner.style.display   = 'none';
+    streamImg.style.display = 'block';
+}
+function showSnap() {
+    streamImg.style.display = 'none';
+    previewMsg.style.display = 'none';
+    spinner.style.display   = 'none';
+    snapImg.style.display   = 'block';
 }
 
-function resetPreview() {
-    document.getElementById('cctvPreviewImg').style.display = 'none';
-    document.getElementById('cctvPreviewImg').src = '';
-    document.getElementById('cctvPreviewLoader').style.display = 'none';
-    document.getElementById('cctvPreviewMsg').style.display = 'flex';
-    document.getElementById('cctvPreviewMsg').style.flexDirection = 'column';
-    document.getElementById('cctvPreviewMsg').style.alignItems = 'center';
-    document.getElementById('cctvPreviewMsg').innerHTML = '<div style="font-size:28px;margin-bottom:8px">&#128247;</div>Click "Load Snapshot" to attempt a live preview';
+function stopStream() {
+    streamActive = false;
+    streamImg.src = '';
+    streamImg.style.display = 'none';
+    liveBadge.style.display = 'none';
+    btnLive.textContent = '\u25B6 Live Stream';
+    btnLive.classList.remove('streaming');
+}
+
+function startLiveStream() {
+    if (!currentRtsp) return;
+    if (streamActive) { stopStream(); showMsg('<span class="icon">&#128247;</span><span>Stream stopped</span>'); return; }
+
+    showSpinner('Connecting to camera...');
+    streamActive = true;
+    btnLive.textContent = '\u25A0 Stop Stream';
+    btnLive.classList.add('streaming');
+
+    const encoded = btoa(currentRtsp);
+    const src = `/api/stream?rtsp=${encodeURIComponent(encoded)}&t=${Date.now()}`;
+
+    streamImg.onload = null;
+    streamImg.onerror = null;
+
+    // For MJPEG the image starts receiving data — we detect "first frame" via a timeout
+    let firstFrameTimeout = setTimeout(() => {
+        if (streamActive) showStream();
+        liveBadge.style.display = 'flex';
+    }, 1500);
+
+    streamImg.onerror = () => {
+        clearTimeout(firstFrameTimeout);
+        stopStream();
+        showMsg(
+            '<span class="icon">&#10060;</span>' +
+            '<span>Could not connect to camera stream.<br>' +
+            '<small style="color:#555">Camera may be offline or RTSP auth failed.</small></span>'
+        );
+    };
+
+    streamImg.src = src;
+    // Show spinner immediately; onerror fires if stream totally fails
 }
 
 function loadSnapshot() {
-    if (!currentCamIp) return;
-    document.getElementById('cctvPreviewMsg').style.display = 'none';
-    document.getElementById('cctvPreviewImg').style.display = 'none';
-    document.getElementById('cctvPreviewLoader').style.display = 'block';
-    document.getElementById('cctvPreviewLoader').textContent = 'Loading snapshot...';
+    if (!currentRtsp) return;
+    const m = currentRtsp.match(/@([\d\.]+):/);
+    if (!m) { showMsg('<span class="icon">&#10060;</span><span>Cannot extract IP</span>'); return; }
+    const ip = m[1];
 
-    const img = document.getElementById('cctvPreviewImg');
+    stopStream();
+    showSpinner('Fetching snapshot...');
+
     const ts = Date.now();
-    img.onload = () => {
-        document.getElementById('cctvPreviewLoader').style.display = 'none';
-        img.style.display = 'block';
+    snapImg.onload = () => { showSnap(); };
+    snapImg.onerror = () => {
+        showMsg(
+            '<span class="icon">&#10060;</span>' +
+            '<span>No snapshot available.<br>' +
+            '<small style="color:#555">Camera may be offline or HTTP not exposed.</small></span>'
+        );
     };
-    img.onerror = () => {
-        document.getElementById('cctvPreviewLoader').style.display = 'none';
-        document.getElementById('cctvPreviewMsg').style.display = 'flex';
-        document.getElementById('cctvPreviewMsg').innerHTML =
-            '<div style="font-size:22px;margin-bottom:6px">&#10060;</div>' +
-            'Snapshot unavailable<br><span style="font-size:10px;color:#555">Camera may be offline or require authentication</span>';
-    };
-    img.src = `/api/snapshot/${currentCamIp}?t=${ts}`;
+    snapImg.src = `/api/snapshot/${ip}?t=${ts}`;
 }
 
+function openCctvModal(ip, item) {
+    currentRtsp = item.rtsp || null;
+
+    document.getElementById('cctvModalTitle').textContent = 'CCTV \u2014 ' + ip;
+    document.getElementById('info_ip').textContent  = ip;
+    document.getElementById('info_org').textContent = item.sys_org || '-';
+    document.getElementById('info_asn').textContent = item.asn || '-';
+    document.getElementById('info_net').textContent = item.network || '-';
+    const src = item.source_url || item.source || '-';
+    document.getElementById('info_src').textContent = src.length > 42 ? src.slice(0,40)+'...' : src;
+    document.getElementById('cctvRtspUrl').textContent = item.rtsp || '-';
+
+    stopStream();
+    showMsg(
+        '<span class="icon">&#128247;</span>' +
+        '<span>Click <b style="color:#0f0">\u25B6 Live Stream</b> to watch<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>'
+    );
+    modal.classList.add('open');
+}
+
+btnLive.onclick = startLiveStream;
+btnSnap.onclick = loadSnapshot;
+
 document.getElementById('cctvModalClose').onclick = () => {
-    document.getElementById('cctvModal').classList.remove('open');
-    currentCamIp = null;
+    stopStream();
+    modal.classList.remove('open');
+    currentRtsp = null;
 };
-document.getElementById('cctvModal').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('cctvModal')) {
-        document.getElementById('cctvModal').classList.remove('open');
-        currentCamIp = null;
+modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+        stopStream();
+        modal.classList.remove('open');
+        currentRtsp = null;
     }
 });
-document.getElementById('cctvRetryBtn').onclick = loadSnapshot;
+
 document.getElementById('cctvCopyBtn').onclick = () => {
     const url = document.getElementById('cctvRtspUrl').textContent;
     if (url && url !== '-') {
@@ -456,7 +608,7 @@ document.getElementById('cctvCopyBtn').onclick = () => {
     }
 };
 
-// ---- Markers ----
+// ========= Markers =========
 function updateMarkers(data_obj) {
     dataStore = data_obj || {};
     const ips = new Set(Object.keys(dataStore));
@@ -475,15 +627,15 @@ function updateMarkers(data_obj) {
         } else {
             const m = L.marker(coords, { icon }).addTo(map);
             markers[ip] = m;
-            const tooltip = `${ip}<br>${item.sys_org || ''}<br>ASN: ${item.asn || ''}<br>${item.network || ''}`;
-            m.bindTooltip(tooltip, { permanent: false, direction: 'top', offset: [0, -10], className: 'ip-tooltip' });
+            const tip = `${ip}<br>${item.sys_org||''}<br>ASN: ${item.asn||''}<br>${item.network||''}`;
+            m.bindTooltip(tip, { permanent:false, direction:'top', offset:[0,-10], className:'ip-tooltip' });
             m.on('click', () => openCctvModal(ip, item));
         }
     }
     document.getElementById('camCount').textContent = Object.keys(markers).length;
 }
 
-// ---- Search ----
+// ========= Search =========
 document.getElementById('searchInput').addEventListener('input', function() {
     const q = this.value.trim().toLowerCase();
     const div = document.getElementById('searchResults');
@@ -495,9 +647,9 @@ document.getElementById('searchInput').addEventListener('input', function() {
         if (text.includes(q)) {
             const el = document.createElement('div');
             el.className = 'searchItem';
-            el.textContent = ip + (item.sys_org ? ' — ' + item.sys_org : '');
+            el.textContent = ip + (item.sys_org ? ' \u2014 ' + item.sys_org : '');
             el.onclick = () => {
-                const p = ('' + item.lalo).split(',').map(x => parseFloat(x));
+                const p = (''+item.lalo).split(',').map(x => parseFloat(x));
                 if (p.length >= 2) map.setView([p[0], p[1]], 10);
                 if (markers[ip]) openCctvModal(ip, item);
                 div.innerHTML = '';
@@ -508,39 +660,35 @@ document.getElementById('searchInput').addEventListener('input', function() {
     }
 });
 
-// ---- Status list ----
+// ========= Remote DB list =========
 function renderStatusList() {
     fetch('/api/config').then(r => r.json()).then(urls => {
         const list = document.getElementById('statusList');
         list.innerHTML = '';
-        const clean = [...new Set((urls || []).filter(Boolean).map(u => String(u).trim()).filter(Boolean))].slice(0, SLOT_COUNT);
-        const SLOT_COUNT_VAL = 10;
-        for (let i = 0; i < SLOT_COUNT_VAL; i++) {
+        const clean = [...new Set((urls||[]).filter(Boolean).map(u=>String(u).trim()).filter(Boolean))].slice(0,10);
+        for (let i = 0; i < 10; i++) {
             const url = clean[i] || null;
-            const display = url ? (url.length > 34 ? url.slice(0, 32) + '..' : url) : 'Empty';
+            const display = url ? (url.length > 34 ? url.slice(0,32)+'..' : url) : 'Empty';
             const div = document.createElement('div');
             div.className = 'statusItem';
             div.innerHTML = `
                 <img src="/location/color_${i+1}.png" class="statusThumb" alt=""/>
                 <div class="statusText" title="${url||''}">${display}</div>
-                ${url ? `<button class="delBtn" data-url="${encodeURIComponent(url)}" title="Remove">x</button>` : ''}
-            `;
+                ${url ? `<button class="delBtn" data-url="${encodeURIComponent(url)}">x</button>` : ''}`;
             if (url) {
                 div.onclick = (ev) => {
                     if (ev.target.classList.contains('delBtn')) return;
                     for (let ip in dataStore) {
                         if (dataStore[ip].source_url === url) {
                             const p = (''+dataStore[ip].lalo).split(',').map(x=>parseFloat(x));
-                            if (p.length>=2) map.setView([p[0],p[1]],10);
-                            break;
+                            if (p.length>=2) map.setView([p[0],p[1]],10); break;
                         }
                     }
                 };
-                const delBtn = div.querySelector('.delBtn');
-                if (delBtn) delBtn.onclick = (ev) => {
+                div.querySelector('.delBtn').onclick = (ev) => {
                     ev.stopPropagation();
                     const u = decodeURIComponent(ev.target.getAttribute('data-url'));
-                    fetch('/api/config', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:u}) })
+                    fetch('/api/config',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})})
                         .then(r=>r.json()).then(()=>{ renderStatusList(); loadData(); });
                 };
             }
@@ -552,29 +700,21 @@ function renderStatusList() {
 document.getElementById('urlBtn').onclick = () => {
     const url = document.getElementById('urlInput').value.trim();
     if (!url) return;
-    fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url}) })
+    fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})})
         .then(r=>r.json()).then(res => {
-            if (res.ok) {
-                document.getElementById('urlInput').value = '';
-                renderStatusList();
-                loadData();
-            } else {
-                alert(res.msg || 'Failed to add URL');
-            }
+            if (res.ok) { document.getElementById('urlInput').value=''; renderStatusList(); loadData(); }
+            else alert(res.msg || 'Failed to add URL');
         });
 };
 
-// ---- Data loading ----
+// ========= Data =========
 function loadData() {
     document.getElementById('dbDot').style.background = '#fa0';
-    fetch('/api/data').then(r => r.json()).then(data => {
+    fetch('/api/data').then(r=>r.json()).then(data => {
         updateMarkers(data);
         document.getElementById('dbDot').style.background = '#0f0';
-        const now = new Date();
-        document.getElementById('lastRefresh').textContent = now.toLocaleTimeString();
-    }).catch(() => {
-        document.getElementById('dbDot').style.background = '#f00';
-    });
+        document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+    }).catch(() => { document.getElementById('dbDot').style.background = '#f00'; });
 }
 
 loadData();
@@ -652,6 +792,74 @@ def api_config_remove():
     return jsonify({"ok": True, "msg": ""})
 
 
+# ---- MJPEG live stream ----
+
+def generate_mjpeg(rtsp_url):
+    cap = None
+    try:
+        os.environ.setdefault('OPENCV_FFMPEG_CAPTURE_OPTIONS', 'rtsp_transport;tcp')
+        cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000)
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000)
+
+        if not cap.isOpened():
+            return
+
+        consecutive_fail = 0
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                consecutive_fail += 1
+                if consecutive_fail > 10:
+                    break
+                time.sleep(0.1)
+                continue
+            consecutive_fail = 0
+
+            ret2, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            if not ret2:
+                continue
+
+            yield (
+                b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' +
+                buf.tobytes() +
+                b'\r\n'
+            )
+    except GeneratorExit:
+        pass
+    except Exception as e:
+        log.error(f"[STREAM ERROR] {e}")
+    finally:
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
+
+
+@app.route('/api/stream')
+def api_stream():
+    encoded = request.args.get('rtsp', '')
+    if not encoded:
+        return Response("Missing rtsp param", status=400)
+    try:
+        rtsp_url = base64.b64decode(encoded).decode('utf-8')
+    except Exception:
+        return Response("Invalid encoding", status=400)
+
+    if not rtsp_url.startswith('rtsp://'):
+        return Response("Invalid URL", status=400)
+
+    return Response(
+        generate_mjpeg(rtsp_url),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+
+# ---- HTTP snapshot ----
+
 SNAPSHOT_PATHS = [
     "/ISAPI/Streaming/channels/101/picture",
     "/onvif/snapshot/1",
@@ -673,28 +881,20 @@ def api_snapshot(ip):
     if not re.match(r'^[\d\.]+$', ip):
         return Response("Invalid IP", status=400)
 
-    ports = [80, 8080, 8000, 443]
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "image/jpeg,image/*,*/*"
-    }
-
-    for port in ports:
+    hdrs = {"User-Agent": "Mozilla/5.0", "Accept": "image/jpeg,image/*,*/*"}
+    for port in [80, 8080, 8000, 443]:
         for path in SNAPSHOT_PATHS:
-            schemes = ["http"]
-            if port == 443:
-                schemes = ["https"]
-            for scheme in schemes:
-                url = f"{scheme}://{ip}:{port}{path}"
-                try:
-                    resp = requests.get(url, timeout=3, verify=False, headers=headers, stream=True)
-                    ct = resp.headers.get("Content-Type", "")
-                    if resp.status_code == 200 and ("image" in ct or "jpeg" in ct or "jpg" in ct):
-                        data = resp.content
-                        if len(data) > 500:
-                            return Response(data, content_type=ct or "image/jpeg")
-                except Exception:
-                    pass
+            scheme = "https" if port == 443 else "http"
+            url = f"{scheme}://{ip}:{port}{path}"
+            try:
+                resp = requests.get(url, timeout=3, verify=False, headers=hdrs, stream=True)
+                ct = resp.headers.get("Content-Type", "")
+                if resp.status_code == 200 and ("image" in ct or "jpeg" in ct):
+                    data = resp.content
+                    if len(data) > 500:
+                        return Response(data, content_type=ct or "image/jpeg")
+            except Exception:
+                pass
 
     return Response("No snapshot available", status=404)
 
