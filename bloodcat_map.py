@@ -7,6 +7,7 @@ import re
 import time
 import threading
 import base64
+import subprocess
 import requests
 import cv2
 
@@ -190,10 +191,63 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 
 #markerCount {
-    position: absolute; top: 10px; left: 60px; z-index: 9999;
+    position: absolute; top: 10px; left: 50px; z-index: 9999;
     background: rgba(0,0,0,0.75); color: #0f0; padding: 5px 10px;
     border-radius: 6px; font-size: 12px; border: 1px solid rgba(0,255,0,0.15);
 }
+
+/* ---- Hack Box ---- */
+#hackBox {
+    position: absolute; left: 10px; bottom: 10px; z-index: 9999;
+    background: rgba(0,0,0,0.82); color: #fff; padding: 10px;
+    border-radius: 8px; width: 310px;
+    border: 1px solid rgba(255,30,30,0.35);
+    display: flex; flex-direction: column; gap: 7px;
+}
+#hackTitle {
+    font-size: 12px; font-weight: bold; color: #f55;
+    display: flex; align-items: center; gap: 6px; letter-spacing: .5px;
+}
+#hackTitle::before {
+    content: "⚡"; font-size: 13px;
+}
+#hackInputRow { display: flex; gap: 6px; }
+#hackIpInput {
+    flex: 1; padding: 5px 8px; border-radius: 4px; border: none; outline: none;
+    background: #1a1a1a; color: #f55; font-size: 12px;
+    border: 1px solid rgba(255,50,50,0.2);
+}
+#hackIpInput::placeholder { color: #544; }
+#hackBtn {
+    padding: 5px 12px; border-radius: 4px; border: none;
+    background: rgba(180,0,0,0.7); color: #f99; cursor: pointer;
+    font-weight: bold; font-size: 12px; transition: background .15s;
+    white-space: nowrap;
+}
+#hackBtn:hover { background: rgba(220,0,0,0.85); }
+#hackBtn:disabled { opacity: .45; cursor: not-allowed; }
+#hackStatus {
+    font-size: 11px; color: #888; min-height: 14px;
+    display: flex; align-items: center; gap: 5px;
+}
+#hackStatusDot {
+    width: 8px; height: 8px; border-radius: 50%; background: #444;
+    flex-shrink: 0; transition: background .3s;
+}
+#hackLog {
+    background: #0a0a0a; border-radius: 4px; border: 1px solid rgba(255,50,50,0.12);
+    padding: 6px 8px; font-size: 11px; font-family: monospace;
+    color: #ccc; max-height: 160px; overflow-y: auto; white-space: pre-wrap;
+    word-break: break-all; display: none;
+}
+#hackLog::-webkit-scrollbar { width: 4px; }
+#hackLog::-webkit-scrollbar-thumb { background: rgba(255,50,50,0.3); border-radius: 2px; }
+.hlog-ok  { color: #4f4; }
+.hlog-err { color: #f55; }
+.hlog-inf { color: #fa0; }
+.hlog-dim { color: #666; }
+
+@media (max-width: 480px) { #hackBox { width: 250px; } }
 
 /* ---- CCTV Modal ---- */
 #cctvModal {
@@ -320,13 +374,22 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 <body>
 
 <div id="map" class="cursor-map"></div>
-<div id="markerCount">Cameras: <span id="camCount">0</span></div>
+<div id="markerCount">Live Cameras: <span id="camCount">0</span></div>
 
 <div id="searchBox">
     <input type="text" id="searchInput" placeholder="Search IP / ASN / Network / Org"/>
     <div id="searchResults"></div>
 </div>
 
+<div id="hackBox">
+    <div id="hackTitle">HACK THE CAMERA</div>
+    <div id="hackInputRow">
+        <input id="hackIpInput" placeholder="ip:port  e.g. 188.134.80.244:554"/>
+        <button id="hackBtn">Hack</button>
+    </div>
+    <div id="hackStatus"><span id="hackStatusDot"></span><span id="hackStatusTxt">Ready</span></div>
+    <div id="hackLog"></div>
+</div>
 
 <!-- CCTV Modal -->
 <div id="cctvModal">
@@ -568,6 +631,94 @@ function loadData() {
 
 loadData();
 setInterval(loadData, 60000);
+
+// ========= Hack The Camera =========
+(function() {
+    const hackBtn     = document.getElementById('hackBtn');
+    const hackInput   = document.getElementById('hackIpInput');
+    const hackLog     = document.getElementById('hackLog');
+    const hackDot     = document.getElementById('hackStatusDot');
+    const hackTxt     = document.getElementById('hackStatusTxt');
+    let   activeEs    = null;
+
+    function setStatus(state, msg) {
+        hackTxt.textContent = msg;
+        if (state === 'idle')    { hackDot.style.background = '#444'; }
+        if (state === 'running') { hackDot.style.background = '#fa0'; hackDot.style.animation = 'blink 1s infinite'; }
+        if (state === 'ok')      { hackDot.style.background = '#0f0'; hackDot.style.animation = ''; }
+        if (state === 'err')     { hackDot.style.background = '#f44'; hackDot.style.animation = ''; }
+    }
+
+    function appendLog(text, cls) {
+        hackLog.style.display = 'block';
+        const line = document.createElement('div');
+        if (cls) line.className = cls;
+        line.textContent = text;
+        hackLog.appendChild(line);
+        hackLog.scrollTop = hackLog.scrollHeight;
+    }
+
+    function colorLine(raw) {
+        const l = raw.toLowerCase();
+        if (l.includes('success') || l.includes('found') || l.includes('[+]')) return 'hlog-ok';
+        if (l.includes('error') || l.includes('fail') || l.includes('[-]')) return 'hlog-err';
+        if (l.includes('[*]') || l.includes('trying') || l.includes('connecting')) return 'hlog-inf';
+        return '';
+    }
+
+    function stopHack() {
+        if (activeEs) { activeEs.close(); activeEs = null; }
+        hackBtn.disabled = false;
+        hackBtn.textContent = 'Hack';
+    }
+
+    hackBtn.addEventListener('click', function() {
+        const target = hackInput.value.trim();
+        if (!target) { hackInput.focus(); return; }
+        if (!/^[\d\.]+:\d+$/.test(target)) {
+            setStatus('err', 'Invalid format. Use ip:port');
+            return;
+        }
+        if (activeEs) stopHack();
+
+        hackLog.innerHTML = '';
+        hackLog.style.display = 'block';
+        hackBtn.disabled = true;
+        hackBtn.textContent = 'Running...';
+        setStatus('running', 'Hacking ' + target + '...');
+        appendLog('$ python3 bloodcat.py --ip ' + target, 'hlog-dim');
+
+        const es = new EventSource('/api/hack?target=' + encodeURIComponent(target));
+        activeEs = es;
+
+        es.addEventListener('log', (e) => {
+            const txt = e.data;
+            appendLog(txt, colorLine(txt));
+        });
+
+        es.addEventListener('done', (e) => {
+            const code = parseInt(e.data, 10);
+            stopHack();
+            if (code === 0) {
+                setStatus('ok', 'Completed');
+                appendLog('[done] Exit 0', 'hlog-ok');
+            } else {
+                setStatus('err', 'Finished (exit ' + code + ')');
+                appendLog('[done] Exit ' + code, 'hlog-err');
+            }
+        });
+
+        es.onerror = () => {
+            stopHack();
+            setStatus('err', 'Connection lost');
+            appendLog('[error] Stream disconnected', 'hlog-err');
+        };
+    });
+
+    hackInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') hackBtn.click();
+    });
+})();
 </script>
 </body>
 </html>
@@ -745,6 +896,52 @@ def api_snapshot(ip):
                 pass
 
     return Response("No snapshot available", status=404)
+
+
+# ---- Hack stream (SSE) ----
+
+def _sse(event, data):
+    return f"event: {event}\ndata: {data}\n\n"
+
+
+@app.route('/api/hack')
+def api_hack():
+    target = request.args.get('target', '').strip()
+    if not re.match(r'^[\d\.]+:\d+$', target):
+        def bad():
+            yield _sse('done', '1')
+        return Response(bad(), mimetype='text/event-stream')
+
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bloodcat.py')
+
+    def generate():
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, script, '--ip', target],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                text=True,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+            for line in proc.stdout:
+                line = line.rstrip('\n').rstrip('\r')
+                if line:
+                    yield _sse('log', line)
+            proc.wait()
+            yield _sse('done', str(proc.returncode))
+        except Exception as e:
+            yield _sse('log', f'[error] {e}')
+            yield _sse('done', '1')
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
 
 if __name__ == "__main__":
