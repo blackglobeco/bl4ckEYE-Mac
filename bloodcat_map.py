@@ -686,7 +686,6 @@ setInterval(loadData, 60000);
         hackBtn.disabled = true;
         hackBtn.textContent = 'Running...';
         setStatus('running', 'Hacking ' + target + '...');
-        appendLog('$ python3 bloodcat.py --ip ' + target, 'hlog-dim');
 
         const es = new EventSource('/api/hack?target=' + encodeURIComponent(target));
         activeEs = es;
