@@ -37,8 +37,8 @@ class CamLib():
         self.LOCAL_LAN_DB = './data/lan.lc'
         self.DB = 'https://raw.githubusercontent.com/MartinxMax/db/refs/heads/main/blood_cat/global.bc'
         self.TIMEOUT=3
-        self.default_user = "bloodcat"
-        self.default_password = "S_H4CK13"
+        self.default_user = "blackeye"
+        self.default_password = "BlackGlobe"
         self.USER = [
             "admin",
             "root",
@@ -560,7 +560,7 @@ class CamLib():
             valid_creds = []
             target_path = paths_with_401[0]
 
-            log.info(f"witching to path: [{target_path}], attempting to retrieve credentials...", f"{target_path}")
+            log.info(f"switching to path: [{target_path}], attempting to retrieve credentials...", f"{target_path}")
             for u in self.USER:
                 for p in self.PASSWORD:
                     auth = self.b64(u, p)
