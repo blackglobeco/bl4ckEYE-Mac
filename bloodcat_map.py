@@ -160,7 +160,7 @@ class GlobalBCHandler(SimpleHTTPRequestHandler):
 def start_bc_server():
     server_address = ("0.0.0.0", API_SER)
     httpd = HTTPServer(server_address, GlobalBCHandler)
-    log.info(f"BloodCat-Map local BC server running on port {API_SER}")
+    log.info(f"BlackEYE local BC server running on port {API_SER}")
     httpd.serve_forever()
 
 
@@ -168,7 +168,7 @@ HTML = r'''<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
-<title>BloodCat Map @ S-H4CK13</title>
+<title>👁️‍🗨️ BlackEYE</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 *, *::before, *::after { box-sizing: border-box; }
@@ -181,10 +181,10 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 #searchBox {
     position: absolute; top: 10px; right: 10px; z-index: 9999;
     background: rgba(0,0,0,0.82); color: #fff; padding: 8px;
-    border-radius: 8px; width: 230px;
-    border: 1px solid rgba(255,50,50,0.15);
+    border-radius: 8px; width: 310px;
+    border: none;
 }
-#searchInput { width: 100%; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #f44; }
+#searchInput { width: 100%; padding: 5px 8px; border-radius: 4px; border: none; outline: none; background: #1a1a1a; color: #fff; }
 #searchResults { max-height: 150px; overflow-y: auto; margin-top: 4px; font-size: 12px; }
 .searchItem { padding: 4px 6px; cursor: pointer; border-radius: 3px; }
 .searchItem:hover { background: rgba(255,50,50,0.15); }
@@ -192,20 +192,20 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 #markerCount {
     position: absolute; top: 10px; left: 50px; z-index: 9999;
-    background: rgba(0,0,0,0.75); color: #f44; padding: 5px 10px;
-    border-radius: 6px; font-size: 12px; border: 1px solid rgba(255,50,50,0.15);
+    background: rgba(0,0,0,0.75); color: #fff; padding: 5px 10px;
+    border-radius: 6px; font-size: 12px; border: none;
 }
 
 /* ---- Hack Box ---- */
 #hackBox {
-    position: absolute; left: 10px; bottom: 80px; z-index: 9999;
+    position: absolute; right: 10px; bottom: 400px; z-index: 9999;
     background: rgba(0,0,0,0.82); color: #fff; padding: 10px;
     border-radius: 8px; width: 310px;
-    border: 1px solid rgba(255,30,30,0.35);
+    border: none;
     display: flex; flex-direction: column; gap: 7px;
 }
 #hackTitle {
-    font-size: 12px; font-weight: bold; color: #f55;
+    font-size: 12px; font-weight: bold; color: #fff;
     display: flex; align-items: center; gap: 6px; letter-spacing: .5px;
 }
 #hackTitle::before {
@@ -214,10 +214,10 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 #hackInputRow { display: flex; gap: 6px; }
 #hackIpInput {
     flex: 1; padding: 5px 8px; border-radius: 4px; border: none; outline: none;
-    background: #1a1a1a; color: #f55; font-size: 12px;
-    border: 1px solid rgba(255,50,50,0.2);
+    background: #1a1a1a; color: #fff; font-size: 12px;
+    border: none;
 }
-#hackIpInput::placeholder { color: #544; }
+
 #hackBtn {
     padding: 5px 12px; border-radius: 4px; border: none;
     background: rgba(180,0,0,0.7); color: #f99; cursor: pointer;
@@ -374,7 +374,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 <body>
 
 <div id="map" class="cursor-map"></div>
-<div id="markerCount">Live Cameras: <span id="camCount">0</span></div>
+<div id="markerCount">🔴 Live Cameras: <span id="camCount">0</span></div>
 
 <div id="searchBox">
     <input type="text" id="searchInput" placeholder="Search IP / ASN / Network / Org"/>
@@ -384,7 +384,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 <div id="hackBox">
     <div id="hackTitle">BlackEYE Camera Hack</div>
     <div id="hackInputRow">
-        <input id="hackIpInput" placeholder="ip:port  e.g. 188.134.80.244:554"/>
+        <input id="hackIpInput" placeholder="IP:PORT  e.g. 188.134.80.244:554"/>
         <button id="hackBtn">Hack</button>
     </div>
     <div id="hackStatus"><span id="hackStatusDot"></span><span id="hackStatusTxt">Ready</span></div>
@@ -904,6 +904,12 @@ def _sse(event, data):
     return f"event: {event}\ndata: {data}\n\n"
 
 
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHFABCDJsr]')
+
+def _strip_ansi(text):
+    return _ANSI_RE.sub('', text)
+
+
 @app.route('/api/hack')
 def api_hack():
     target = request.args.get('target', '').strip()
@@ -913,20 +919,38 @@ def api_hack():
         return Response(bad(), mimetype='text/event-stream')
 
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bloodcat.py')
+    env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
 
     def generate():
         try:
             proc = subprocess.Popen(
-                [sys.executable, script, '--ip', target],
+                [sys.executable, '-u', script, '--ip', target],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                bufsize=1,
-                text=True,
-                cwd=os.path.dirname(os.path.abspath(__file__))
+                bufsize=0,
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                env=env
             )
-            for line in proc.stdout:
-                line = line.rstrip('\n').rstrip('\r')
-                if line:
+            header_passed = False
+            buf = b''
+            while True:
+                chunk = proc.stdout.read(1)
+                if not chunk:
+                    break
+                buf += chunk
+                if chunk == b'\n':
+                    line = _strip_ansi(buf.decode('utf-8', errors='replace')).rstrip()
+                    buf = b''
+                    if not header_passed:
+                        # Skip the ASCII art logo until we see the version/header banner
+                        if 'Blood Cat' in line or 'Maptnh' in line:
+                            header_passed = True
+                        continue
+                    if line:
+                        yield _sse('log', line)
+            if buf:
+                line = _strip_ansi(buf.decode('utf-8', errors='replace')).rstrip()
+                if header_passed and line:
                     yield _sse('log', line)
             proc.wait()
             yield _sse('done', str(proc.returncode))
@@ -947,5 +971,5 @@ def api_hack():
 if __name__ == "__main__":
     print(LOGO)
     threading.Thread(target=start_bc_server, daemon=True).start()
-    log.info(f"BloodCat Map web server starting on http://0.0.0.0:{WEB_PORT}")
+    log.info(f"BlackEYE web server starting on http://0.0.0.0:{WEB_PORT}")
     app.run(host='0.0.0.0', port=WEB_PORT, debug=False, threaded=True)
