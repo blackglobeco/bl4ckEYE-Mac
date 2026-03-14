@@ -194,6 +194,14 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     position: absolute; top: 10px; left: 50px; z-index: 9999;
     background: rgba(0,0,0,0.75); color: #fff; padding: 5px 10px;
     border-radius: 6px; font-size: 12px; border: none;
+    display: flex; align-items: center; gap: 6px;
+}
+#liveDotMap {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #f33;
+    box-shadow: 0 0 6px #f33;
+    animation: blink 1.2s ease-in-out infinite;
+    flex-shrink: 0;
 }
 
 /* ---- Hack Box ---- */
@@ -260,10 +268,10 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 #cctvModalBox {
     background: #0d0d0d;
-    border: 1px solid rgba(255,50,50,0.3);
+    border: 1px solid #171717;
     border-radius: 10px;
     width: 520px; max-width: 96vw;
-    box-shadow: 0 0 50px rgba(255,50,50,0.12);
+    box-shadow: none;
     overflow: hidden;
     display: flex; flex-direction: column;
 }
@@ -271,14 +279,14 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 #cctvModalHeader {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 14px;
-    background: rgba(255,50,50,0.07);
-    border-bottom: 1px solid rgba(255,50,50,0.15);
+    background: #0d0d0d;
+    border-bottom: none;
     flex-shrink: 0;
 }
-#cctvModalTitle { color: #f44; font-size: 14px; font-weight: bold; flex: 1; }
+#cctvModalTitle { color: #fff; font-size: 14px; font-weight: bold; flex: 1; }
 #liveBadge {
     display: none; align-items: center; gap: 4px;
-    font-size: 10px; color: #f44; background: rgba(255,50,50,0.12);
+    font-size: 10px; color: #fff; background: rgba(255,50,50,0.12);
     border: 1px solid rgba(255,50,50,0.3); border-radius: 10px;
     padding: 2px 8px;
 }
@@ -289,10 +297,10 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
 #cctvModalClose {
-    background: transparent; border: none; color: #f77;
+    background: transparent; border: none; color: #aaa;
     font-size: 20px; cursor: pointer; line-height: 1; padding: 0 2px;
 }
-#cctvModalClose:hover { color: #f00; }
+#cctvModalClose:hover { color: #fff; }
 
 /* Tab bar */
 #tabBar {
@@ -330,12 +338,12 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 
 #previewSpinner {
     display: none; flex-direction: column; align-items: center; gap: 10px;
-    color: #f44; font-size: 12px;
+    color: #aaa; font-size: 12px;
 }
 .spinner-ring {
     width: 36px; height: 36px;
-    border: 3px solid rgba(255,50,50,0.15);
-    border-top-color: #f44;
+    border: 3px solid #777;
+    border-top-color: #aaa;
     border-radius: 50%;
     animation: spin 0.9s linear infinite;
 }
@@ -351,9 +359,9 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
     flex: 1; padding: 7px; border-radius: 5px; border: none;
     font-size: 12px; cursor: pointer; font-weight: bold; transition: all .15s;
 }
-#btnLive { background: rgba(255,50,50,0.1); color: #f44; border: 1px solid rgba(255,50,50,0.25); }
+#btnLive { background: rgba(255,50,50,0.1); color: #fff; border: 1px solid rgba(255,50,50,0.25); }
 #btnLive:hover { background: rgba(255,50,50,0.2); }
-#btnLive.streaming { background: rgba(255,60,60,0.1); color: #f77; border-color: rgba(255,60,60,0.3); }
+#btnLive.streaming { background: rgba(255,60,60,0.1); color: #fff; border-color: rgba(255,60,60,0.3); }
 
 /* Info table */
 #cctvInfoTable {
@@ -362,7 +370,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 }
 #cctvInfoTable table { width: 100%; border-collapse: collapse; }
 #cctvInfoTable td { padding: 3px 6px; }
-#cctvInfoTable td:first-child { color: #f44; width: 76px; }
+#cctvInfoTable td:first-child { color: #ccc; width: 76px; }
 
 @media (max-width: 480px) {
     #searchBox { width: 175px; }
@@ -374,7 +382,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
 <body>
 
 <div id="map" class="cursor-map"></div>
-<div id="markerCount">🔴 Live Cameras: <span id="camCount">0</span></div>
+<div id="markerCount"><span id="liveDotMap"></span>Live Cameras: <span id="camCount">0</span></div>
 
 <div id="searchBox">
     <input type="text" id="searchInput" placeholder="Search IP / ASN / Network / Org"/>
@@ -412,8 +420,7 @@ html, body, #map { height: 100%; margin: 0; padding: 0; background: #000; font-f
                 <span id="spinnerMsg">Connecting...</span>
             </div>
             <div id="previewMsg">
-                <span class="icon">&#128247;</span>
-                <span>Click <b style="color:#f44">Live Stream</b> to watch the camera<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>
+                <span>Click <b style="color:#aaa">Live Stream</b> to watch the camera<br>or <b style="color:#aaa">Snapshot</b> for a still frame</span>
             </div>
         </div>
 
@@ -503,7 +510,7 @@ function stopStream() {
 
 function startLiveStream() {
     if (!currentRtsp) return;
-    if (streamActive) { stopStream(); showMsg('<span class="icon">&#128247;</span><span>Stream stopped</span>'); return; }
+    if (streamActive) { stopStream(); showMsg('<span>Stream stopped</span>'); return; }
 
     showSpinner('Connecting to camera...');
     streamActive = true;
@@ -526,9 +533,8 @@ function startLiveStream() {
         clearTimeout(firstFrameTimeout);
         stopStream();
         showMsg(
-            '<span class="icon">&#10060;</span>' +
             '<span>Could not connect to camera stream.<br>' +
-            '<small style="color:#555">Camera may be offline or RTSP auth failed.</small></span>'
+            '<small style="color:#555">Camera may be offline or RTSP auth failed. Try again.</small></span>'
         );
     };
 
@@ -549,8 +555,7 @@ function openCctvModal(ip, item) {
     document.getElementById('info_src').textContent = src.length > 42 ? src.slice(0,40)+'...' : src;
     stopStream();
     showMsg(
-        '<span class="icon">&#128247;</span>' +
-        '<span>Click <b style="color:#f44">\u25B6 Live Stream</b> to watch</span>'
+        '<span>Click <b style="color:aaa">\u25B6 Live Stream</b> to watch</span>'
     );
     modal.classList.add('open');
 }
